@@ -1,0 +1,47 @@
+@{
+    var morning = Slots.Where(slot => slot.CustomerStart.Hour < 12).ToList();
+    var afternoon = Slots.Where(slot => slot.CustomerStart.Hour >= 12).ToList();
+}
+
+@if (morning.Count > 0)
+{
+    <h2>Morning</h2>
+    <div class="times">
+        @foreach (var slot in morning)
+        {
+            <button type="button"
+                    class="time @(IsSelected(slot) ? "is-selected" : null)"
+                    data-time="@DiaryText.Time(slot.CustomerStart)"
+                    @onclick="() => OnPick.InvokeAsync(slot)">
+                @DiaryText.Time(slot.CustomerStart)
+            </button>
+        }
+    </div>
+}
+
+@if (afternoon.Count > 0)
+{
+    <h2>Afternoon</h2>
+    <div class="times">
+        @foreach (var slot in afternoon)
+        {
+            <button type="button"
+                    class="time @(IsSelected(slot) ? "is-selected" : null)"
+                    data-time="@DiaryText.Time(slot.CustomerStart)"
+                    @onclick="() => OnPick.InvokeAsync(slot)">
+                @DiaryText.Time(slot.CustomerStart)
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<CustomerSlot> Slots { get; set; } = [];
+    [Parameter] public CustomerSlot? Selected { get; set; }
+    [Parameter, EditorRequired] public EventCallback<CustomerSlot> OnPick { get; set; }
+
+    private bool IsSelected(CustomerSlot slot) =>
+        Selected is { } chosen &&
+        chosen.BusinessDate == slot.BusinessDate &&
+        chosen.BusinessStart == slot.BusinessStart;
+}

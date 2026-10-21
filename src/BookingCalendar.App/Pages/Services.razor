@@ -2,20 +2,19 @@
 @inject StudioSession Session
 @inject NavigationManager Nav
 
-<PageTitle>Services · @Catalog.BusinessName</PageTitle>
+<PageTitle>Choose a service · @Catalog.BusinessName</PageTitle>
 
-<FlowHead Step="1" Title="Choose a service" />
-<p class="lede">@Catalog.BusinessName books @Catalog.ProviderName. Pick a service. Each one has a fixed length.</p>
-
-<ul class="cards">
-    @foreach (var service in Catalog.Services)
+<h1>Choose a service</h1>
+<ul class="choices">
+    @foreach (var service in Session.Offered)
     {
         <li>
-            <button type="button" class="card" data-service="@service.Id" @onclick="() => Choose(service)">
-                <span class="card-kicker">Service</span>
-                <span class="card-title">@service.Name</span>
-                <span class="card-meta">@service.LengthMinutes minutes</span>
-                <span class="card-copy">@service.Summary</span>
+            <button type="button" class="choice" data-service="@service.Id" @onclick="() => Choose(service)">
+                <span>
+                    <span class="choice-title">@service.Name</span>
+                    <span class="choice-copy">@service.Summary</span>
+                </span>
+                <span class="choice-meta">@service.LengthMinutes min</span>
             </button>
         </li>
     }

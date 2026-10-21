@@ -1,0 +1,116 @@
+@page "/setup"
+@inject StudioSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Hours · @Catalog.BusinessName</PageTitle>
+
+<h1>Weekly hours</h1>
+<div class="days-setup">
+    @foreach (var day in _days)
+    {
+        <div class="day-row">
+            <span class="day-name">@day.Day</span>
+            <div class="day-controls">
+                <label>
+                    <input type="checkbox" checked="@day.IsOpen" @onchange="eventArgs => Toggle(day.Day, eventArgs)" />
+                    Open
+                </label>
+                @if (day.IsOpen)
+                {
+                    <select value="@DiaryText.Time(day.Opens)" @onchange="eventArgs => ChangeOpen(day.Day, eventArgs)">
+                        @foreach (var time in DiaryText.HalfHours())
+                        {
+                            <option value="@DiaryText.Time(time)">@DiaryText.Time(time)</option>
+                        }
+                    </select>
+                    <span>to</span>
+                    <select value="@DiaryText.Time(day.Closes)" @onchange="eventArgs => ChangeClose(day.Day, eventArgs)">
+                        @foreach (var time in DiaryText.HalfHours())
+                        {
+                            <option value="@DiaryText.Time(time)">@DiaryText.Time(time)</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <span class="tag">Closed</span>
+                }
+            </div>
+        </div>
+    }
+</div>
+@if (_error is not null)
+{
+    <p class="field-error" role="alert">@_error</p>
+}
+<button type="button" class="primary" @onclick="Continue">Continue</button>
+
+@code {
+    private List<DayHours> _days = [];
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _days = Session.Schedule.Days.ToList();
+    }
+
+    private WeeklySchedule Current() => new(_days);
+
+    private void Toggle(DayOfWeek day, ChangeEventArgs args)
+    {
+        var open = args.Value is bool flag && flag;
+        var current = _days.First(item => item.Day == day);
+        Replace(current with { IsOpen = open });
+    }
+
+    private void ChangeOpen(DayOfWeek day, ChangeEventArgs args)
+    {
+        if (!TryTime(args.Value, out var time))
+            return;
+
+        var current = _days.First(item => item.Day == day);
+        Replace(current with { Opens = time });
+    }
+
+    private void ChangeClose(DayOfWeek day, ChangeEventArgs args)
+    {
+        if (!TryTime(args.Value, out var time))
+            return;
+
+        var current = _days.First(item => item.Day == day);
+        Replace(current with { Closes = time });
+    }
+
+    private void Replace(DayHours next)
+    {
+        _days = _days.Select(item => item.Day == next.Day ? next : item).ToList();
+    }
+
+    private static bool TryTime(object? value, out TimeOnly time)
+    {
+        time = default;
+        var text = value?.ToString();
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var parts = text.Split(':');
+        if (parts.Length < 2 || !int.TryParse(parts[0], out var hour) || !int.TryParse(parts[1], out var minute))
+            return false;
+
+        time = new TimeOnly(hour, minute);
+        return true;
+    }
+
+    private void Continue()
+    {
+        var schedule = Current();
+        if (!WeeklySchedule.IsValid(schedule))
+        {
+            _error = "Open at least one day, and make sure it ends after it starts.";
+            return;
+        }
+
+        Session.SetSchedule(schedule);
+        Nav.NavigateTo("/setup/services");
+    }
+}

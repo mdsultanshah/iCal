@@ -2,60 +2,35 @@
 @inject StudioSession Session
 @inject NavigationManager Nav
 
-<PageTitle>Date · @Catalog.BusinessName</PageTitle>
+<PageTitle>Select a date · @Catalog.BusinessName</PageTitle>
 
-<FlowHead Step="2" Title="Pick a date" />
-<p class="lede">The next 14 days. Weekends and past days are closed. Times are Singapore time.</p>
-<a class="back" href="/">Back to services</a>
-
-<div class="days">
-    @foreach (var day in _days)
-    {
-        var past = BookingRules.IsPastDay(day, Session.Today);
-        var weekend = BookingRules.IsWeekend(day);
-        var closed = past || weekend;
-        var free = closed || _service is null
-            ? 0
-            : BookingRules.FreeSlots(_service, day, Session.Today, Session.Now, Session.Bookings).Count;
-        var note = past ? "Past" : weekend ? "Closed" : free == 0 ? "Full" : "Open";
-        var availability = past ? "past" : weekend ? "closed" : free == 0 ? "full" : "open";
-        <button type="button"
-                class="day"
-                disabled="@closed"
-                data-date="@DiaryText.Iso(day)"
-                data-availability="@availability"
-                @onclick="() => Choose(day)">
-            <span class="day-name">@DiaryText.Weekday(day)</span>
-            <span class="day-num">@day.Day</span>
-            <span class="day-month">@DiaryText.Month(day)</span>
-            <span class="day-note">@note</span>
-        </button>
-    }
-</div>
+<a class="back" href="/">Back</a>
+<h1>Select a date</h1>
+<MonthCalendar Days="_days" Selected="Session.CustomerDate" State="StateOf" OnPick="Choose" />
 
 @code {
     private readonly List<DateOnly> _days = [];
-    private Service? _service;
 
     protected override void OnInitialized()
     {
-        _service = Session.SelectedService;
-        if (_service is null)
+        if (Session.SelectedService is null)
         {
             Nav.NavigateTo("/");
             return;
         }
 
         Session.RefreshClock();
-        _days.AddRange(BookingRules.NextDays(Session.Today));
+        _days.AddRange(Availability.CalendarDays(Session.Today));
     }
+
+    private DayState StateOf(DateOnly day) => Session.StateFor(day);
 
     private void Choose(DateOnly day)
     {
-        if (!BookingRules.CanSelectDate(day, Session.Today))
+        if (!Availability.CanPick(Session.StateFor(day)))
             return;
 
         Session.SelectDate(day);
-        Nav.NavigateTo("/slots");
+        Nav.NavigateTo("/times");
     }
 }

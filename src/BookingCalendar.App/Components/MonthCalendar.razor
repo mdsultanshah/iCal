@@ -1,0 +1,46 @@
+<p class="month">@DiaryText.MonthTitle(Days)</p>
+<div class="cal">
+    @foreach (var name in Headers)
+    {
+        <div class="cal-head">@name</div>
+    }
+    @foreach (var day in Days)
+    {
+        var state = State(day);
+        var selected = Selected == day && state == DayState.Open;
+        <button type="button"
+                class="day @ClassFor(state) @(selected ? "is-selected" : null)"
+                disabled="@(!Availability.CanPick(state))"
+                data-date="@DiaryText.Iso(day)"
+                data-state="@state.ToString().ToLowerInvariant()"
+                @onclick="() => OnPick.InvokeAsync(day)">
+            <span class="num">@day.Day</span>
+            @if (state == DayState.Full)
+            {
+                <span class="badge">Full</span>
+            }
+            else if (state == DayState.Closed)
+            {
+                <span class="tag">Closed</span>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    private static readonly string[] Headers = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+    [Parameter, EditorRequired] public IReadOnlyList<DateOnly> Days { get; set; } = [];
+    [Parameter] public DateOnly? Selected { get; set; }
+    [Parameter, EditorRequired] public Func<DateOnly, DayState> State { get; set; } = _ => DayState.Closed;
+    [Parameter, EditorRequired] public EventCallback<DateOnly> OnPick { get; set; }
+
+    private static string ClassFor(DayState state) => state switch
+    {
+        DayState.Open => "is-open",
+        DayState.Full => "is-full",
+        DayState.Past => "is-past",
+        DayState.Outside => "is-outside",
+        _ => "is-closed",
+    };
+}

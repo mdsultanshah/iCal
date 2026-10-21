@@ -2,14 +2,12 @@
 @inject StudioSession Session
 @inject NavigationManager Nav
 
-<PageTitle>Details · @Catalog.BusinessName</PageTitle>
+<PageTitle>Your details · @Catalog.BusinessName</PageTitle>
 
 @if (_ready)
 {
-    <FlowHead Step="4" Title="Your details" />
-    <p class="lede">A name and an email for this booking. Nothing is sent. It stays in this browser.</p>
-    <a class="back" href="/slots">Back to slots</a>
-
+    <a class="back" href="/times">Back</a>
+    <h1>Your details</h1>
     <form @onsubmit="Submit" @onsubmit:preventDefault>
         <label class="field" for="customer-name">
             <span>Name</span>
@@ -51,7 +49,7 @@
 
     protected override void OnInitialized()
     {
-        if (Session.SelectedService is null || Session.Date is null || Session.Start is null)
+        if (Session.SelectedService is null || Session.CustomerStart is null)
         {
             Nav.NavigateTo("/");
             return;

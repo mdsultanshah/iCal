@@ -1,41 +1,58 @@
 @page "/confirmation/{Reference}"
 @inject StudioSession Session
+@inject NavigationManager Nav
 
 <PageTitle>Booking confirmed · @Catalog.BusinessName</PageTitle>
 
 @if (_booking is null)
 {
-    <p class="kicker">Booking</p>
     <h1>Booking not found</h1>
-    <p class="lede">This booking reference is not in this browser.</p>
-    <a class="text-link" href="/">Back to services</a>
+    <a class="back" href="/">Back</a>
 }
-else
+else if (_booking is { } booking)
 {
-    <p class="kicker">Booking</p>
+    var shown = Session.Display(booking);
     <h1>Booking confirmed</h1>
-    <p class="lede">You are booked with @Catalog.ProviderName. Keep the booking reference, or use the cancel link if you need the slot back.</p>
-
-    <BookingSummary ServiceName="@_booking.ServiceName"
-                    LengthMinutes="@_booking.LengthMinutes"
-                    DateText="@DiaryText.Date(_booking.Date)"
-                    SlotText="@DiaryText.Slot(_booking.Start, BookingRules.FromMinutes(BookingRules.ToMinutes(_booking.Start) + _booking.LengthMinutes))"
-                    CustomerName="@_booking.CustomerName"
-                    CustomerEmail="@_booking.CustomerEmail" />
+    <BookingSummary ServiceName="@booking.ServiceName"
+                    LengthMinutes="@booking.LengthMinutes"
+                    DateText="@DiaryText.Date(shown.Date)"
+                    TimeText="@DiaryText.Range(shown.Start, shown.End)"
+                    CustomerName="@booking.CustomerName"
+                    CustomerEmail="@booking.CustomerEmail" />
 
     <p class="label">Booking reference</p>
-    <p class="reference">@_booking.BookingReference</p>
+    <CopyRow Text="@booking.BookingReference" />
 
     <p class="label">Cancel link</p>
-    <a class="cancel-link" href="@CancelLink.For(_booking.BookingReference)">@CancelLink.For(_booking.BookingReference)</a>
+    <CopyRow Text="@_cancelUrl" Href="@CancelLink.For(booking.BookingReference)" CopyText="@_cancelUrl" />
+
+    <p class="label">Reschedule link</p>
+    <CopyRow Text="@_rescheduleUrl" Href="@RescheduleLink.For(booking.BookingReference)" CopyText="@_rescheduleUrl" />
+
+    <p class="note">This link works only in this browser on this device</p>
+    <button type="button" class="primary" @onclick="BookAnother">Book another</button>
 }
 
 @code {
     [Parameter] public string Reference { get; set; } = "";
+
     private Booking? _booking;
+    private string _cancelUrl = "";
+    private string _rescheduleUrl = "";
 
     protected override void OnParametersSet()
     {
         _booking = Session.FindAny(Reference);
+        if (_booking is null)
+            return;
+
+        _cancelUrl = Nav.ToAbsoluteUri(CancelLink.For(_booking.BookingReference)).ToString();
+        _rescheduleUrl = Nav.ToAbsoluteUri(RescheduleLink.For(_booking.BookingReference)).ToString();
+    }
+
+    private void BookAnother()
+    {
+        Session.ClearDraft();
+        Nav.NavigateTo("/");
     }
 }

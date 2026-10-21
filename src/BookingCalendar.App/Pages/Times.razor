@@ -1,0 +1,78 @@
+@page "/times"
+@page "/slots"
+@inject StudioSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Pick a time · @Catalog.BusinessName</PageTitle>
+
+@if (_ready && _date is DateOnly date)
+{
+    <a class="back" href="/date">Back</a>
+    <h1>Pick a time</h1>
+    <p class="zone" data-zone>Times in @Session.CustomerZoneLabel</p>
+    <p class="month">@DiaryText.Date(date)</p>
+
+    @if (_slots.Count == 0)
+    {
+        <p class="empty-title">No times left on this day</p>
+        @if (_next is DateOnly next)
+        {
+            <button type="button" class="primary" data-next-day="@DiaryText.Iso(next)" @onclick="() => Go(next)">
+                Next day with free times · @DiaryText.Date(next)
+            </button>
+        }
+    }
+    else
+    {
+        <TimeList Slots="_slots" OnPick="Choose" />
+    }
+}
+
+@code {
+    private bool _ready;
+    private DateOnly? _date;
+    private List<CustomerSlot> _slots = [];
+    private DateOnly? _next;
+
+    protected override void OnInitialized()
+    {
+        Session.OpenEmptyPreview();
+        if (Session.SelectedService is null)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        if (Session.CustomerDate is null)
+        {
+            Nav.NavigateTo("/date");
+            return;
+        }
+
+        _ready = true;
+        Load();
+    }
+
+    private void Load()
+    {
+        Session.RefreshClock();
+        _date = Session.CustomerDate;
+        if (_date is not DateOnly date)
+            return;
+
+        _slots = Session.FreeTimes(date).ToList();
+        _next = Session.NextOpen(date);
+    }
+
+    private void Choose(CustomerSlot slot)
+    {
+        Session.SelectTime(slot);
+        Nav.NavigateTo("/details");
+    }
+
+    private void Go(DateOnly day)
+    {
+        Session.SelectDate(day);
+        Load();
+    }
+}

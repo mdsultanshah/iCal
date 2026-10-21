@@ -1,15 +1,15 @@
-<dl class="summary">
+<dl class="summary-list">
     <div>
         <dt>Service</dt>
-        <dd>@ServiceName <span class="quiet">@LengthMinutes minutes</span></dd>
+        <dd>@ServiceName <span class="meta">@LengthMinutes min</span></dd>
     </div>
     <div>
         <dt>Date</dt>
         <dd>@DateText</dd>
     </div>
     <div>
-        <dt>Slot</dt>
-        <dd>@SlotText</dd>
+        <dt>Time</dt>
+        <dd>@TimeText</dd>
     </div>
     <div>
         <dt>Name</dt>
@@ -28,7 +28,7 @@
     [Parameter, EditorRequired] public string ServiceName { get; set; } = "";
     [Parameter, EditorRequired] public int LengthMinutes { get; set; }
     [Parameter, EditorRequired] public string DateText { get; set; } = "";
-    [Parameter, EditorRequired] public string SlotText { get; set; } = "";
+    [Parameter, EditorRequired] public string TimeText { get; set; } = "";
     [Parameter, EditorRequired] public string CustomerName { get; set; } = "";
     [Parameter] public string? CustomerEmail { get; set; }
 }

@@ -4,16 +4,16 @@ namespace BookingCalendar.Core;
 /// Test-only URL options. <c>?reset=1</c> clears browser data back to the seeded
 /// bookings. <c>?today=yyyy-mm-dd</c> fixes what "today" is.
 /// </summary>
-public sealed record PrototypeOptions(bool Reset, DateOnly? Today)
+public sealed record PrototypeOptions(bool Reset, DateOnly? Today, bool PreviewEmpty)
 {
     public static PrototypeOptions Parse(string? url)
     {
         if (string.IsNullOrEmpty(url))
-            return new PrototypeOptions(false, null);
+            return new PrototypeOptions(false, null, false);
 
         var queryIndex = url.IndexOf('?');
         if (queryIndex < 0 || queryIndex == url.Length - 1)
-            return new PrototypeOptions(false, null);
+            return new PrototypeOptions(false, null, false);
 
         var query = url[(queryIndex + 1)..];
         var hash = query.IndexOf('#');
@@ -21,6 +21,7 @@ public sealed record PrototypeOptions(bool Reset, DateOnly? Today)
             query = query[..hash];
 
         var reset = false;
+        var previewEmpty = false;
         DateOnly? today = null;
 
         foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -36,9 +37,12 @@ public sealed record PrototypeOptions(bool Reset, DateOnly? Today)
 
             if (key == "today" && TryParseDate(value, out var date))
                 today = date;
+
+            if (key == "preview" && value == "empty")
+                previewEmpty = true;
         }
 
-        return new PrototypeOptions(reset, today);
+        return new PrototypeOptions(reset, today, previewEmpty);
     }
 
     public static bool TryParseDate(string? value, out DateOnly date)

@@ -1,0 +1,128 @@
+@page "/reschedule/{Reference}"
+@inject StudioSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Reschedule · @Catalog.BusinessName</PageTitle>
+
+@if (_missing)
+{
+    <h1>Reschedule</h1>
+    <p class="banner" role="alert">This booking was not found or is already cancelled.</p>
+    <a class="back" href="/">Back</a>
+}
+else if (_booking is { } current)
+{
+    var shown = Session.Display(current);
+    <h1>Reschedule</h1>
+    <BookingSummary ServiceName="@current.ServiceName"
+                    LengthMinutes="@current.LengthMinutes"
+                    DateText="@DiaryText.Date(shown.Date)"
+                    TimeText="@DiaryText.Range(shown.Start, shown.End)"
+                    CustomerName="@current.CustomerName"
+                    CustomerEmail="@current.CustomerEmail" />
+    <p class="zone" data-zone>Times in @Session.CustomerZoneLabel</p>
+    <MonthCalendar Days="_days" Selected="_date" State="StateOf" OnPick="PickDate" />
+
+    @if (_date is not null)
+    {
+        @if (_slots.Count == 0)
+        {
+            <p class="empty-title">No times left on this day</p>
+        }
+        else
+        {
+            <TimeList Slots="_slots" Selected="_chosen" OnPick="PickTime" />
+        }
+    }
+
+    @if (_chosen is CustomerSlot chosen)
+    {
+        <p class="ends">Ends at @DiaryText.Time(chosen.CustomerEnd)</p>
+        <button type="button" class="primary" @onclick="Save">Reschedule</button>
+    }
+
+    @if (_failed)
+    {
+        <p class="banner" role="alert">That time has just been taken.</p>
+    }
+}
+
+@code {
+    [Parameter] public string Reference { get; set; } = "";
+
+    private Booking? _booking;
+    private bool _missing;
+    private bool _failed;
+    private bool _synced;
+    private readonly List<DateOnly> _days = [];
+    private DateOnly? _date;
+    private List<CustomerSlot> _slots = [];
+    private CustomerSlot? _chosen;
+
+    protected override void OnParametersSet()
+    {
+        _booking = Session.FindActive(Reference);
+        _missing = _booking is null;
+        if (_missing || _booking is not { } current)
+            return;
+
+        Session.RefreshClock();
+        if (!_synced)
+        {
+            _synced = true;
+            var service = Catalog.Find(current.ServiceId);
+            if (service is not null)
+                Session.SelectService(service);
+
+            var shown = Session.Display(current);
+            var end = BookingRules.FromMinutes(BookingRules.ToMinutes(current.Start) + current.LengthMinutes);
+            Session.SelectTime(new CustomerSlot(
+                current.Date,
+                current.Start,
+                end,
+                shown.Date,
+                shown.Start,
+                shown.End));
+        }
+
+        _days.Clear();
+        _days.AddRange(Availability.CalendarDays(Session.Today));
+    }
+
+    private DayState StateOf(DateOnly day) => Session.StateFor(day, ignoreReference: Reference);
+
+    private void PickDate(DateOnly day)
+    {
+        if (!Availability.CanPick(StateOf(day)))
+            return;
+
+        _date = day;
+        _chosen = null;
+        _failed = false;
+        _slots = Session.FreeTimes(day, Reference).ToList();
+        Session.SelectDate(day);
+    }
+
+    private void PickTime(CustomerSlot slot)
+    {
+        _chosen = slot;
+        _failed = false;
+        Session.SelectTime(slot);
+    }
+
+    private async Task Save()
+    {
+        if (_chosen is not CustomerSlot slot)
+            return;
+
+        var updated = Session.TryReschedule(Reference, slot);
+        if (updated is null)
+        {
+            _failed = true;
+            return;
+        }
+
+        await Session.SaveAsync();
+        Nav.NavigateTo($"/confirmation/{updated.BookingReference}");
+    }
+}

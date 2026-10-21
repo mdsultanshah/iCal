@@ -1,6 +1,6 @@
 # Booking Calendar prototype
 
-Throwaway clickable prototype of a phone-first booking calendar for **North Quay Studio** (one provider, three services). Fake data only. Bookings stay in the browser. This is not for production and must not be merged as product work.
+Throwaway prototype of a phone-first booking calendar for **North Quay Studio**. Fake data only. Bookings stay in this browser. This must not be merged as product work.
 
 ## Run
 
@@ -11,12 +11,13 @@ dotnet run
 
 Then open `http://127.0.0.1:5088`.
 
-Test-only URL options:
+- `/setup` sets weekly hours, chooses 1 to 3 services, and shows one share link.
+- `/` is the customer booking page.
+- `/?reset=1` restores the seeded bookings and the default hours.
+- `/?today=yyyy-mm-dd` fixes what "today" is.
+- `/times?preview=empty` opens a day with no times (for screenshots). Pair it with `reset=1` and `today=yyyy-mm-dd`.
 
-- `/?reset=1` clears browser data back to the seeded bookings.
-- `/?today=2026-10-21` fixes what "today" is (`yyyy-mm-dd`).
-
-Slots are calculated in Singapore time (Asia/Singapore, UTC+8), Monday to Friday, 9:00–17:00.
+Times are shown in the browser's time zone. The business hours are Asia/Singapore (UTC+8) unless the owner changes the weekly hours.
 
 ## Check
 
@@ -24,5 +25,3 @@ Slots are calculated in Singapore time (Asia/Singapore, UTC+8), Monday to Friday
 dotnet build -c Release -warnaserror
 dotnet test -c Release
 ```
-
-The published site is static (Blazor WebAssembly). There is no backend and no external API.

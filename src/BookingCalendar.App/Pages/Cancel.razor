@@ -1,40 +1,42 @@
 @page "/cancel/{Reference}"
 @inject StudioSession Session
+@inject NavigationManager Nav
 
 <PageTitle>Cancel · @Catalog.BusinessName</PageTitle>
 
-@if (_cancelled is not null)
+@if (_cancelled is { } cancelled)
 {
-    <p class="kicker">Booking</p>
+    var shown = Session.Display(cancelled);
     <h1>Cancelled</h1>
-    <p class="lede">This booking is cancelled. The slot is free again.</p>
-    <BookingSummary ServiceName="@_cancelled.ServiceName"
-                    LengthMinutes="@_cancelled.LengthMinutes"
-                    DateText="@DiaryText.Date(_cancelled.Date)"
-                    SlotText="@DiaryText.Slot(_cancelled.Start, BookingRules.FromMinutes(BookingRules.ToMinutes(_cancelled.Start) + _cancelled.LengthMinutes))"
-                    CustomerName="@_cancelled.CustomerName"
-                    CustomerEmail="@_cancelled.CustomerEmail" />
-    <a class="text-link" href="/">Book another service</a>
+    <p class="note">This booking is cancelled. The time is free again.</p>
+    <BookingSummary ServiceName="@cancelled.ServiceName"
+                    LengthMinutes="@cancelled.LengthMinutes"
+                    DateText="@DiaryText.Date(shown.Date)"
+                    TimeText="@DiaryText.Range(shown.Start, shown.End)"
+                    CustomerName="@cancelled.CustomerName"
+                    CustomerEmail="@cancelled.CustomerEmail" />
+    <button type="button" class="primary" @onclick="BookAnother">Book another</button>
 }
 else if (_booking is null)
 {
-    <p class="kicker">Booking</p>
     <h1>Cancel a booking</h1>
     <p class="banner" role="alert">This booking was not found or is already cancelled.</p>
-    <a class="text-link" href="/">Back to services</a>
+    <a class="back" href="/">Back</a>
 }
-else
+else if (_booking is { } active)
 {
-    <p class="kicker">Booking</p>
+    var shown = Session.Display(active);
     <h1>Cancel this booking?</h1>
-    <p class="lede">This is the booking from the cancel link. Confirm to free the slot.</p>
-    <BookingSummary ServiceName="@_booking.ServiceName"
-                    LengthMinutes="@_booking.LengthMinutes"
-                    DateText="@DiaryText.Date(_booking.Date)"
-                    SlotText="@DiaryText.Slot(_booking.Start, BookingRules.FromMinutes(BookingRules.ToMinutes(_booking.Start) + _booking.LengthMinutes))"
-                    CustomerName="@_booking.CustomerName"
-                    CustomerEmail="@_booking.CustomerEmail" />
-    <button type="button" class="primary danger" @onclick="ConfirmCancel">Cancel this booking</button>
+    <BookingSummary ServiceName="@active.ServiceName"
+                    LengthMinutes="@active.LengthMinutes"
+                    DateText="@DiaryText.Date(shown.Date)"
+                    TimeText="@DiaryText.Range(shown.Start, shown.End)"
+                    CustomerName="@active.CustomerName"
+                    CustomerEmail="@active.CustomerEmail" />
+    <div class="actions">
+        <button type="button" class="primary" @onclick="ConfirmCancel">Cancel this booking</button>
+        <button type="button" class="secondary" @onclick="Keep">Keep my booking</button>
+    </div>
 }
 
 @code {
@@ -63,5 +65,13 @@ else
         await Session.SaveAsync();
         _cancelled = booking with { IsCancelled = true };
         _booking = null;
+    }
+
+    private void Keep() => Nav.NavigateTo($"/confirmation/{Reference}");
+
+    private void BookAnother()
+    {
+        Session.ClearDraft();
+        Nav.NavigateTo("/");
     }
 }

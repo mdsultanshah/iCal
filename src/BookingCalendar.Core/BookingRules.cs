@@ -46,14 +46,17 @@ public static class BookingRules
         return startMinutes + lengthMinutes <= close;
     }
 
-    public static IReadOnlyList<TimeOnly> CandidateStarts(int lengthMinutes)
+    public static IReadOnlyList<TimeOnly> CandidateStarts(int lengthMinutes) =>
+        StartsBetween(Catalog.Opens, Catalog.Closes, lengthMinutes);
+
+    public static IReadOnlyList<TimeOnly> StartsBetween(TimeOnly opens, TimeOnly closes, int lengthMinutes)
     {
         var starts = new List<TimeOnly>();
-        if (lengthMinutes <= 0)
+        if (lengthMinutes <= 0 || closes <= opens)
             return starts;
 
-        var cursor = ToMinutes(Catalog.Opens);
-        var close = ToMinutes(Catalog.Closes);
+        var cursor = ToMinutes(opens);
+        var close = ToMinutes(closes);
         while (cursor + lengthMinutes <= close)
         {
             starts.Add(FromMinutes(cursor));
