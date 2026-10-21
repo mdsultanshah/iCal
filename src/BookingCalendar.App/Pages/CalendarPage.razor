@@ -1,0 +1,279 @@
+@page "/"
+@implements IDisposable
+@inject AppointmentStore Store
+@inject IJSRuntime JS
+
+<PageTitle>Appointments · North Quay Studio</PageTitle>
+
+<div class="shell" data-view="@(Store.ShowDay ? "day" : "week")" @attributes="ShellAttributes">
+    <header class="top" data-header>
+        <p class="brand">North Quay Studio</p>
+        <div class="pager">
+            <button type="button" class="icon" aria-label="@(Store.ShowDay ? "Previous day" : "Previous week")" @onclick="Store.Previous">‹</button>
+            <button type="button" class="today" @onclick="Store.ShowToday">Today</button>
+            <button type="button" class="icon" aria-label="@(Store.ShowDay ? "Next day" : "Next week")" @onclick="Store.Next">›</button>
+        </div>
+        <p class="zone">@Store.ZoneLabel</p>
+        <h1 class="range">@Heading</h1>
+        @if (Store.HasExamples)
+        {
+            <button type="button" class="ghost clear-header" @onclick="OpenClear">Clear examples</button>
+        }
+        <button type="button" id="new-appointment" class="primary" @onclick="OpenNew">New appointment</button>
+    </header>
+
+    @if (IsEmpty)
+    {
+        <p class="empty">@EmptyText</p>
+    }
+
+    <AppointmentGrid Days="Store.VisibleDays"
+                     Appointments="Store.Appointments"
+                     Today="Store.Today"
+                     ShowClear="@(Store.HasExamples && Store.Narrow && Store.ShowDay)"
+                     OnClear="OpenClear"
+                     OnSlot="OpenSlot"
+                     OnOpen="OpenAppointment" />
+</div>
+
+<div class="live" aria-live="polite" aria-atomic="true">
+    @if (Store.Toast is { } toast)
+    {
+        <p class="toast" data-toast>@toast</p>
+    }
+</div>
+
+@if (_panel is { } panel)
+{
+    <AppointmentPanel @key="panel.Key"
+                      Mode="@panel.Mode"
+                      Id="@panel.Id"
+                      Title="@panel.Title"
+                      Date="@panel.Date"
+                      Start="@panel.Start"
+                      End="@panel.End"
+                      Note="@panel.Note"
+                      IsExample="@panel.IsExample"
+                      TitleError="@_titleError"
+                      DateError="@_dateError"
+                      StartError="@_startError"
+                      EndError="@_endError"
+                      OnClearError="ClearOne"
+                      OnSave="Save"
+                      OnCancel="Close"
+                      OnAskDelete="AskDelete"
+                      OnConfirmDelete="ConfirmDelete"
+                      OnConfirmClear="ConfirmClear" />
+}
+
+@code {
+    private PanelRequest? _panel;
+    private string? _titleError;
+    private string? _dateError;
+    private string? _startError;
+    private string? _endError;
+    private bool _focusNew;
+
+    private string Heading =>
+        Store.ShowDay
+            ? CalendarText.DayTitle(Store.Cursor)
+            : CalendarText.WeekTitle(CalendarRange.Week(Store.Cursor));
+
+    private bool IsEmpty => !Store.Appointments.Any(item => Store.VisibleDays.Contains(item.Date));
+
+    private string EmptyText => Store.ShowDay ? "No appointments this day." : "No appointments this week.";
+
+    private IReadOnlyDictionary<string, object>? ShellAttributes =>
+        _panel is null ? null : new Dictionary<string, object> { ["inert"] = true };
+
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusNew)
+            return;
+
+        _focusNew = false;
+        try
+        {
+            await JS.InvokeVoidAsync("northQuay.focus", "#new-appointment");
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+    }
+
+    public void Dispose() => Store.Changed -= OnChanged;
+
+    private void OnChanged()
+    {
+        try
+        {
+            _ = InvokeAsync(StateHasChanged);
+        }
+        catch (ObjectDisposedException)
+        {
+            // The page is going away.
+        }
+    }
+
+    private void OpenSlot(SlotChoice choice)
+    {
+        var start = new TimeOnly(choice.Hour, 0);
+        Open(new PanelRequest(
+            $"create-{CalendarText.DateValue(choice.Date)}-{choice.Hour}",
+            "create",
+            null,
+            "",
+            CalendarText.DateValue(choice.Date),
+            CalendarText.Time(start),
+            CalendarText.Time(CalendarRange.DefaultEnd(start)),
+            "",
+            false));
+    }
+
+    private void OpenNew()
+    {
+        var date = NewAppointmentDate();
+        var start = new TimeOnly(9, 0);
+        Open(new PanelRequest(
+            $"create-button-{CalendarText.DateValue(date)}",
+            "create",
+            null,
+            "",
+            CalendarText.DateValue(date),
+            CalendarText.Time(start),
+            CalendarText.Time(CalendarRange.DefaultEnd(start)),
+            "",
+            false));
+    }
+
+    private void OpenAppointment(Appointment item)
+    {
+        Open(new PanelRequest(
+            $"edit-{item.Id}",
+            "edit",
+            item.Id,
+            item.Title,
+            CalendarText.DateValue(item.Date),
+            CalendarText.Time(item.Start),
+            CalendarText.Time(item.End),
+            item.Note,
+            item.IsExample));
+    }
+
+    private void OpenClear()
+    {
+        Open(new PanelRequest("clear", "clear", null, "", "", "", "", "", false));
+    }
+
+    private void AskDelete()
+    {
+        if (_panel is null)
+            return;
+
+        Open(_panel with { Key = $"delete-{_panel.Id}", Mode = "delete" });
+    }
+
+    private async Task Save(AppointmentDraft draft)
+    {
+        var titleError = AppointmentRules.TitleError(draft.Title);
+        var dateOk = PrototypeOptions.TryParseDate(draft.Date, out var date);
+        var startOk = CalendarText.TryParseTime(draft.Start, out var start);
+        var endOk = CalendarText.TryParseTime(draft.End, out var end);
+        string? timeError = null;
+        if (startOk && endOk)
+            timeError = AppointmentRules.TimeOrderError(start, end);
+
+        if (titleError is not null || !dateOk || !startOk || !endOk || timeError is not null)
+        {
+            _titleError = titleError;
+            _dateError = dateOk ? null : "Enter a date.";
+            _startError = startOk ? null : "Enter a start.";
+            _endError = !endOk ? "Enter an end." : timeError;
+            return;
+        }
+
+        _panel = null;
+        _focusNew = true;
+        await Store.SaveAsync(draft.Id, draft.Title, date, start, end, draft.Note);
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_panel?.Id is not { } id)
+            return;
+
+        _panel = null;
+        _focusNew = true;
+        await Store.DeleteAsync(id);
+    }
+
+    private async Task ConfirmClear()
+    {
+        _panel = null;
+        _focusNew = true;
+        await Store.ClearExamplesAsync();
+    }
+
+    private void Close()
+    {
+        _panel = null;
+        ClearErrors();
+        _focusNew = true;
+    }
+
+    private void Open(PanelRequest request)
+    {
+        ClearErrors();
+        _panel = request;
+    }
+
+    private void ClearOne(string field)
+    {
+        switch (field)
+        {
+            case "title":
+                _titleError = null;
+                break;
+            case "date":
+                _dateError = null;
+                break;
+            case "start":
+                _startError = null;
+                break;
+            case "end":
+                _endError = null;
+                break;
+        }
+    }
+
+    private void ClearErrors()
+    {
+        _titleError = null;
+        _dateError = null;
+        _startError = null;
+        _endError = null;
+    }
+
+    private DateOnly NewAppointmentDate()
+    {
+        if (Store.ShowDay)
+            return Store.Cursor;
+
+        var week = CalendarRange.Week(Store.Cursor);
+        return week.Contains(Store.Today) ? Store.Today : week[0];
+    }
+
+    private sealed record PanelRequest(
+        string Key,
+        string Mode,
+        string? Id,
+        string Title,
+        string Date,
+        string Start,
+        string End,
+        string Note,
+        bool IsExample);
+}

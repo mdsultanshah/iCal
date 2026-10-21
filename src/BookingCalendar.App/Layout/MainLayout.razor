@@ -1,73 +1,34 @@
 ﻿@inherits LayoutComponentBase
-@inject StudioSession Session
+@inject AppointmentStore Store
 @inject NavigationManager Nav
 
-<div class="page">
-    <div class="card">
-        <aside class="summary">
-            <p class="biz">@Catalog.BusinessName</p>
-            <p class="who">@Catalog.ProviderName</p>
-            @if (IsSetup)
-            {
-                <p class="picked">@SetupLabel</p>
-            }
-            else
-            {
-                @if (Session.SelectedService is { } service)
-                {
-                    <p class="picked">@service.Name</p>
-                    <p class="meta">@service.LengthMinutes min</p>
-                }
-                @if (Session.CustomerDate is DateOnly date)
-                {
-                    <p class="picked">@DiaryText.ShortDate(date)</p>
-                }
-                @if (Session.CustomerStart is TimeOnly start && Session.CustomerEnd is TimeOnly end)
-                {
-                    <p class="picked">@DiaryText.Range(start, end)</p>
-                }
-                <p class="hours">@DiaryText.Hours(Session.Schedule)</p>
-            }
-        </aside>
-        <div class="step">
-            @if (Session.IsReady)
-            {
-                @Body
-            }
-            else if (_failed)
-            {
-                <h1>Something went wrong</h1>
-                <p class="note">Reload the page to start again.</p>
-            }
-            else
-            {
-                <p class="boot">Loading</p>
-            }
-        </div>
-    </div>
-</div>
+@if (Store.IsReady)
+{
+    @Body
+}
+else if (_failed)
+{
+    <main class="missing">
+        <h1>Something went wrong</h1>
+        <p>Reload the page to start again.</p>
+    </main>
+}
+else
+{
+    <p class="boot">Loading</p>
+}
 
 @code {
     private bool _failed;
 
-    private bool IsSetup =>
-        new Uri(Nav.Uri).AbsolutePath.StartsWith("/setup", StringComparison.OrdinalIgnoreCase);
-
-    private string SetupLabel => new Uri(Nav.Uri).AbsolutePath switch
-    {
-        "/setup/services" => "Services",
-        "/setup/link" => "Share link",
-        _ => "Hours",
-    };
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || Session.IsReady || _failed)
+        if (!firstRender || Store.IsReady || _failed)
             return;
 
         try
         {
-            await Session.InitializeAsync(Nav.Uri);
+            await Store.InitializeAsync(Nav.Uri);
         }
         catch (JSException)
         {

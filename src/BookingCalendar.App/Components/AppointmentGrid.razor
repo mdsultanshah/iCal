@@ -1,0 +1,127 @@
+@using System.Globalization
+
+<div class="cal" style="@GridStyle" role="region" aria-label="@Label">
+    <div class="gutter-head"></div>
+    @foreach (var day in Days)
+    {
+        var isToday = day == Today;
+        <div class="col-head @(isToday ? "is-today" : null)" @attributes="TodayAttributes(isToday)">
+            @if (Days.Count == 1)
+            {
+                <span class="col-name">@CalendarText.Weekday(day)</span>
+                <span class="col-num @(isToday ? "mark" : null)">@day.Day</span>
+                <span class="col-month">@CalendarText.Month(day)</span>
+                @if (ShowClear)
+                {
+                    <button type="button" class="ghost clear-inline" @onclick="OnClear">Clear examples</button>
+                }
+            }
+            else
+            {
+                <span class="col-name">@CalendarText.ShortWeekday(day)</span>
+                <span class="col-num @(isToday ? "mark" : null)">@day.Day</span>
+            }
+        </div>
+    }
+    <div class="gutter" aria-hidden="true">
+        @foreach (var hour in CalendarRange.Hours())
+        {
+            <div class="hour-label">@CalendarText.Time(hour)</div>
+        }
+    </div>
+    @foreach (var day in Days)
+    {
+        var placed = OverlapLayout.Place(Appointments.Where(item => item.Date == day)).ToList();
+        <div class="day-col @(day == Today ? "is-today" : null)">
+            @foreach (var hour in CalendarRange.Hours())
+            {
+                <button type="button"
+                        class="slot"
+                        data-date="@CalendarText.DateValue(day)"
+                        data-hour="@hour.Hour"
+                        aria-label="@SlotLabel(day, hour)"
+                        @onclick="() => Pick(day, hour.Hour)"></button>
+                @foreach (var place in placed.Where(item => item.Appointment.Start.Hour == hour.Hour))
+                {
+                    <button type="button"
+                            class="event"
+                            data-appointment="@place.Appointment.Id"
+                            style="@EventStyle(place)"
+                            aria-label="@EventLabel(place.Appointment)"
+                            @onclick="() => OnOpen.InvokeAsync(place.Appointment)">
+                        <span class="event-title">@place.Appointment.Title</span>
+                        <span class="event-meta">
+                            <span class="event-time">@CalendarText.Range(place.Appointment.Start, place.Appointment.End)</span>
+                            @if (place.Appointment.IsExample)
+                            {
+                                <span class="badge">Example</span>
+                            }
+                        </span>
+                    </button>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DateOnly> Days { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Appointment> Appointments { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+
+    [Parameter]
+    public bool ShowClear { get; set; }
+
+    [Parameter]
+    public EventCallback OnClear { get; set; }
+
+    [Parameter]
+    public EventCallback<SlotChoice> OnSlot { get; set; }
+
+    [Parameter]
+    public EventCallback<Appointment> OnOpen { get; set; }
+
+    private string GridStyle => $"--days:{Days.Count.ToString(CultureInfo.InvariantCulture)}";
+
+    private string Label =>
+        Days.Count == 1 ? CalendarText.DayTitle(Days[0]) : CalendarText.WeekTitle(Days);
+
+    private Task Pick(DateOnly date, int hour) => OnSlot.InvokeAsync(new SlotChoice(date, hour));
+
+    private static string SlotLabel(DateOnly day, TimeOnly hour) =>
+        $"New appointment, {CalendarText.DayTitle(day)}, {CalendarText.Time(hour)}";
+
+    private static string EventLabel(Appointment item)
+    {
+        var kind = item.IsExample ? "Example. " : "";
+        return $"{kind}{item.Title}, {CalendarText.DayTitle(item.Date)}, {CalendarText.Range(item.Start, item.End)}";
+    }
+
+    private static IReadOnlyDictionary<string, object>? TodayAttributes(bool isToday) =>
+        isToday
+            ? new Dictionary<string, object> { ["aria-current"] = "date", ["data-today"] = "true" }
+            : null;
+
+    private static string EventStyle(PlacedAppointment place)
+    {
+        var item = place.Appointment;
+        var start = item.Start.Hour * 60 + item.Start.Minute;
+        var end = item.End.Hour * 60 + item.End.Minute;
+        var top = start / (24d * 60d) * 100d;
+        var height = (end - start) / (24d * 60d) * 100d;
+        var left = place.Column * (100d / place.ColumnCount);
+        var width = 100d / place.ColumnCount;
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "top:{0:0.####}%;height:{1:0.####}%;left:calc({2:0.####}% + 2px);width:calc({3:0.####}% - 4px);",
+            top,
+            height,
+            left,
+            width);
+    }
+}

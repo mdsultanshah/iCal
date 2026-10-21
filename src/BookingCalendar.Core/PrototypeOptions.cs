@@ -1,19 +1,21 @@
 namespace BookingCalendar.Core;
 
 /// <summary>
-/// Test-only URL options. <c>?reset=1</c> clears browser data back to the seeded
-/// bookings. <c>?today=yyyy-mm-dd</c> fixes what "today" is.
+/// Test-only URL options. <c>?reset=1</c> clears saved appointments and restores the
+/// three examples. <c>?today=yyyy-mm-dd</c> fixes what "today" is.
+/// <c>?preview=empty</c> shows a week with nothing on it.
+/// <c>?view=day</c> or <c>?view=week</c> forces the layout.
 /// </summary>
-public sealed record PrototypeOptions(bool Reset, DateOnly? Today, bool PreviewEmpty)
+public sealed record PrototypeOptions(bool Reset, DateOnly? Today, bool PreviewEmpty, string? View)
 {
     public static PrototypeOptions Parse(string? url)
     {
         if (string.IsNullOrEmpty(url))
-            return new PrototypeOptions(false, null, false);
+            return new PrototypeOptions(false, null, false, null);
 
         var queryIndex = url.IndexOf('?');
         if (queryIndex < 0 || queryIndex == url.Length - 1)
-            return new PrototypeOptions(false, null, false);
+            return new PrototypeOptions(false, null, false, null);
 
         var query = url[(queryIndex + 1)..];
         var hash = query.IndexOf('#');
@@ -23,6 +25,7 @@ public sealed record PrototypeOptions(bool Reset, DateOnly? Today, bool PreviewE
         var reset = false;
         var previewEmpty = false;
         DateOnly? today = null;
+        string? view = null;
 
         foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -40,9 +43,12 @@ public sealed record PrototypeOptions(bool Reset, DateOnly? Today, bool PreviewE
 
             if (key == "preview" && value == "empty")
                 previewEmpty = true;
+
+            if (key == "view" && value is "day" or "week")
+                view = value;
         }
 
-        return new PrototypeOptions(reset, today, previewEmpty);
+        return new PrototypeOptions(reset, today, previewEmpty, view);
     }
 
     public static bool TryParseDate(string? value, out DateOnly date)
