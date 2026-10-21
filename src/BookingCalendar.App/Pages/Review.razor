@@ -1,0 +1,82 @@
+@page "/review"
+@inject StudioSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Review · @Catalog.BusinessName</PageTitle>
+
+@if (_ready && _service is not null && _date is DateOnly date && _start is TimeOnly start)
+{
+    <FlowHead Step="5" Title="Review this booking" />
+    <p class="lede">Check the service, date, time and name, then confirm.</p>
+    <a class="back" href="/details">Back to details</a>
+
+    <BookingSummary ServiceName="@_service.Name"
+                    LengthMinutes="@_service.LengthMinutes"
+                    DateText="@DiaryText.Date(date)"
+                    SlotText="@DiaryText.Slot(start, BookingRules.FromMinutes(BookingRules.ToMinutes(start) + _service.LengthMinutes))"
+                    CustomerName="@Session.Name"
+                    CustomerEmail="@Session.Email" />
+
+    @if (_saving)
+    {
+        <p class="status" role="status" data-saving="true">Saving booking…</p>
+    }
+
+    @if (_taken)
+    {
+        <p class="banner" role="alert">That slot has just been taken.</p>
+        <a class="text-link" href="/slots">Choose another slot</a>
+    }
+
+    <button type="button"
+            class="primary @(_saving ? "is-saving" : null)"
+            disabled="@_saving"
+            aria-busy="@_saving"
+            @onclick="Confirm">
+        @(_saving ? "Saving booking…" : "Confirm booking")
+    </button>
+}
+
+@code {
+    private bool _ready;
+    private bool _saving;
+    private bool _taken;
+    private Service? _service;
+    private DateOnly? _date;
+    private TimeOnly? _start;
+
+    protected override void OnInitialized()
+    {
+        _service = Session.SelectedService;
+        _date = Session.Date;
+        _start = Session.Start;
+        if (_service is null || _date is null || _start is null || CustomerDetails.NameError(Session.Name) is not null)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        _ready = true;
+    }
+
+    private async Task Confirm()
+    {
+        if (_saving)
+            return;
+
+        _saving = true;
+        _taken = false;
+        await Task.Delay(StudioSession.SaveDelay);
+
+        var booking = Session.TryConfirm();
+        if (booking is null)
+        {
+            _saving = false;
+            _taken = true;
+            return;
+        }
+
+        await Session.SaveAsync();
+        Nav.NavigateTo($"/confirmation/{booking.BookingReference}");
+    }
+}

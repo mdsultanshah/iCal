@@ -1,0 +1,34 @@
+<dl class="summary">
+    <div>
+        <dt>Service</dt>
+        <dd>@ServiceName <span class="quiet">@LengthMinutes minutes</span></dd>
+    </div>
+    <div>
+        <dt>Date</dt>
+        <dd>@DateText</dd>
+    </div>
+    <div>
+        <dt>Slot</dt>
+        <dd>@SlotText</dd>
+    </div>
+    <div>
+        <dt>Name</dt>
+        <dd>@CustomerName</dd>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(CustomerEmail))
+    {
+        <div>
+            <dt>Email</dt>
+            <dd>@CustomerEmail</dd>
+        </div>
+    }
+</dl>
+
+@code {
+    [Parameter, EditorRequired] public string ServiceName { get; set; } = "";
+    [Parameter, EditorRequired] public int LengthMinutes { get; set; }
+    [Parameter, EditorRequired] public string DateText { get; set; } = "";
+    [Parameter, EditorRequired] public string SlotText { get; set; } = "";
+    [Parameter, EditorRequired] public string CustomerName { get; set; } = "";
+    [Parameter] public string? CustomerEmail { get; set; }
+}

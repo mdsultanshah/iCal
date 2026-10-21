@@ -1,0 +1,67 @@
+@page "/cancel/{Reference}"
+@inject StudioSession Session
+
+<PageTitle>Cancel · @Catalog.BusinessName</PageTitle>
+
+@if (_cancelled is not null)
+{
+    <p class="kicker">Booking</p>
+    <h1>Cancelled</h1>
+    <p class="lede">This booking is cancelled. The slot is free again.</p>
+    <BookingSummary ServiceName="@_cancelled.ServiceName"
+                    LengthMinutes="@_cancelled.LengthMinutes"
+                    DateText="@DiaryText.Date(_cancelled.Date)"
+                    SlotText="@DiaryText.Slot(_cancelled.Start, BookingRules.FromMinutes(BookingRules.ToMinutes(_cancelled.Start) + _cancelled.LengthMinutes))"
+                    CustomerName="@_cancelled.CustomerName"
+                    CustomerEmail="@_cancelled.CustomerEmail" />
+    <a class="text-link" href="/">Book another service</a>
+}
+else if (_booking is null)
+{
+    <p class="kicker">Booking</p>
+    <h1>Cancel a booking</h1>
+    <p class="banner" role="alert">This booking was not found or is already cancelled.</p>
+    <a class="text-link" href="/">Back to services</a>
+}
+else
+{
+    <p class="kicker">Booking</p>
+    <h1>Cancel this booking?</h1>
+    <p class="lede">This is the booking from the cancel link. Confirm to free the slot.</p>
+    <BookingSummary ServiceName="@_booking.ServiceName"
+                    LengthMinutes="@_booking.LengthMinutes"
+                    DateText="@DiaryText.Date(_booking.Date)"
+                    SlotText="@DiaryText.Slot(_booking.Start, BookingRules.FromMinutes(BookingRules.ToMinutes(_booking.Start) + _booking.LengthMinutes))"
+                    CustomerName="@_booking.CustomerName"
+                    CustomerEmail="@_booking.CustomerEmail" />
+    <button type="button" class="primary danger" @onclick="ConfirmCancel">Cancel this booking</button>
+}
+
+@code {
+    [Parameter] public string Reference { get; set; } = "";
+
+    private Booking? _booking;
+    private Booking? _cancelled;
+
+    protected override void OnParametersSet()
+    {
+        if (_cancelled is not null)
+            return;
+
+        _booking = Session.FindActive(Reference);
+    }
+
+    private async Task ConfirmCancel()
+    {
+        var booking = Session.FindAny(Reference);
+        if (booking is null || booking.IsCancelled || !Session.Cancel(Reference))
+        {
+            _booking = null;
+            return;
+        }
+
+        await Session.SaveAsync();
+        _cancelled = booking with { IsCancelled = true };
+        _booking = null;
+    }
+}
