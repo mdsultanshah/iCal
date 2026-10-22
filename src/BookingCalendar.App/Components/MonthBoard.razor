@@ -1,0 +1,153 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="weekday-row" aria-hidden="true">
+    @foreach (var name in Weekdays)
+    {
+        <span>@name</span>
+    }
+</div>
+<div class="month-grid"
+     role="grid"
+     data-month-grid
+     style="@GridStyle"
+     aria-label="@Caption">
+    @foreach (var day in Days)
+    {
+        var mine = DayAgenda.Ordered(Appointments.Where(item => item.Date == day));
+        var count = mine.Count;
+        var selected = day == Selected;
+        var today = day == Today;
+        var outside = !CalendarRange.InMonth(day, Selected);
+        <div class="cell @(outside ? "is-outside" : null) @(selected ? "is-selected" : null)">
+            <button type="button"
+                    class="day-fill"
+                    role="gridcell"
+                    data-date="@CalendarText.DateValue(day)"
+                    data-selected="@(selected ? "true" : null)"
+                    data-today="@(today ? "true" : null)"
+                    tabindex="@(selected ? 0 : -1)"
+                    aria-label="@CalendarLabel.DayAccessName(day, count)"
+                    aria-selected="@(selected ? "true" : "false")"
+                    aria-current="@(today ? "date" : null)"
+                    @onclick="() => OnDay.InvokeAsync(day)">
+                <span class="num @(today ? "is-today" : null) @(selected ? "is-selected" : null)">@day.Day</span>
+                @if (today)
+                {
+                    <span class="today-dot" aria-hidden="true"></span>
+                }
+                <span class="busy-dot @(count > 0 ? "is-on" : null)" aria-hidden="true"></span>
+            </button>
+            <div class="chips">
+                @foreach (var item in DayAgenda.Chips(mine))
+                {
+                    <button type="button"
+                            class="chip"
+                            data-appointment="@item.Id"
+                            aria-label="@ChipLabel(item)"
+                            @onclick="() => OnOpen.InvokeAsync(item)"
+                            @onclick:stopPropagation="true">
+                        <span class="chip-text">@DayAgenda.ChipText(item, Use24Hour)</span>
+                        @if (item.IsExample)
+                        {
+                            <span class="badge" aria-hidden="true">Ex</span>
+                        }
+                    </button>
+                }
+                @if (DayAgenda.MoreLabel(count) is { } more)
+                {
+                    <button type="button"
+                            class="more-link"
+                            data-more="@more"
+                            @onclick="() => OnMore.InvokeAsync(day)"
+                            @onclick:stopPropagation="true">@more</button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly string[] Weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    private DotNetObjectReference<MonthBoard>? _self;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DateOnly> Days { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Appointment> Appointments { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public DateOnly Selected { get; set; }
+
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+
+    [Parameter]
+    public bool Use24Hour { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<DateOnly> OnDay { get; set; }
+
+    [Parameter]
+    public EventCallback<DateOnly> OnArrow { get; set; }
+
+    [Parameter]
+    public EventCallback<Appointment> OnOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<DateOnly> OnMore { get; set; }
+
+    private string Caption => $"{CalendarText.Month(Selected)} {Selected.Year}";
+
+    private string GridStyle => $"--weeks:{Math.Max(1, Days.Count / 7)}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _self = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("northQuay.bindMonth", _self);
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+    }
+
+    [JSInvokable]
+    public Task MoveDay(string iso, string key)
+    {
+        if (!PrototypeOptions.TryParseDate(iso, out var date))
+            return Task.CompletedTask;
+
+        var next = CalendarRange.MoveByArrow(date, key);
+        if (next == date)
+            return Task.CompletedTask;
+
+        return OnArrow.InvokeAsync(next);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("northQuay.unbindMonth");
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+
+        _self?.Dispose();
+    }
+
+    private string ChipLabel(Appointment item)
+    {
+        var kind = item.IsExample ? "Example. " : "";
+        return $"{kind}{DayAgenda.ChipText(item, Use24Hour)}";
+    }
+}

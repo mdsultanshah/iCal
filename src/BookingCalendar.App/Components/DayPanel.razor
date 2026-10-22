@@ -1,0 +1,222 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="panel @(Narrow ? "sheet" : null)"
+     data-trap="panel"
+     data-panel="@Mode"
+     data-sheet="@(Narrow ? "panel" : null)"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="panel-title"
+     tabindex="-1">
+    <div class="panel-bar">
+        <button type="button" id="panel-close" class="ghost" @onclick="OnClose">Close</button>
+    </div>
+
+    @if (Mode == "delete")
+    {
+        <h2 id="panel-title">Delete this appointment?</h2>
+        <div class="actions">
+            <button type="button" id="keep-appointment" class="ghost" @onclick="OnKeep">Keep</button>
+            <button type="button" id="confirm-delete" class="danger" @onclick="OnConfirmDelete">Delete</button>
+        </div>
+    }
+    else if (Mode == "clear")
+    {
+        <h2 id="panel-title">Clear example appointments?</h2>
+        <p class="note">This removes the sample appointments. Appointments you added stay.</p>
+        <div class="actions">
+            <button type="button" id="keep-examples" class="ghost" @onclick="OnClose">Keep</button>
+            <button type="button" id="confirm-clear" class="danger" @onclick="OnConfirmClear">Clear examples</button>
+        </div>
+    }
+    else if (Mode is "create" or "edit")
+    {
+        <AppointmentEditor @key="FormKey"
+                          Mode="@Mode"
+                          Id="@Id"
+                          Title="@Title"
+                          Date="@DateText"
+                          Start="@Start"
+                          End="@End"
+                          Note="@Note"
+                          IsExample="@IsExample"
+                          TitleError="@TitleError"
+                          DateError="@DateError"
+                          StartError="@StartError"
+                          EndError="@EndError"
+                          OnClearError="OnClearError"
+                          OnSave="OnSave"
+                          OnCancel="OnClose" />
+    }
+    else if (Mode == "details")
+    {
+        <h2 id="panel-title">@Title</h2>
+        @if (IsExample)
+        {
+            <p class="example-flag"><span class="badge" aria-label="Example">Ex</span></p>
+        }
+        <p class="when">@CalendarText.FullDate(Day)</p>
+        <p class="when">@When</p>
+        <p class="note">@(string.IsNullOrWhiteSpace(Note) ? "No notes." : Note)</p>
+        <div class="actions">
+            <button type="button" id="edit-appointment" class="ghost" @onclick="OnEdit">Edit</button>
+            <button type="button" id="delete-appointment" class="danger" @onclick="OnAskDelete">Delete</button>
+        </div>
+    }
+    else
+    {
+        <h2 id="panel-title">@CalendarText.DayTitle(Day)</h2>
+        @if (Items.Count == 0)
+        {
+            <p class="empty">No appointments this day.</p>
+        }
+        else
+        {
+            <div class="appointments">
+                @foreach (var item in Items)
+                {
+                    <button type="button"
+                            class="appt"
+                            data-appointment="@item.Id"
+                            @onclick="() => OnOpen.InvokeAsync(item)">
+                        <span class="appt-time">@CalendarText.ClockRange(item.Start, item.End, Use24Hour)</span>
+                        <span class="appt-title">@item.Title</span>
+                        @if (item.IsExample)
+                        {
+                            <span class="badge" aria-hidden="true">Ex</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private readonly string _trapId = "panel";
+    private DotNetObjectReference<DayPanel>? _self;
+
+    [Parameter, EditorRequired]
+    public string Mode { get; set; } = "list";
+
+    [Parameter]
+    public bool Narrow { get; set; }
+
+    [Parameter, EditorRequired]
+    public DateOnly Day { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<Appointment> Items { get; set; } = [];
+
+    [Parameter]
+    public bool Use24Hour { get; set; } = true;
+
+    [Parameter]
+    public string FormKey { get; set; } = "";
+
+    [Parameter]
+    public string? Id { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string DateText { get; set; } = "";
+
+    [Parameter]
+    public string Start { get; set; } = "";
+
+    [Parameter]
+    public string End { get; set; } = "";
+
+    [Parameter]
+    public string Note { get; set; } = "";
+
+    [Parameter]
+    public bool IsExample { get; set; }
+
+    [Parameter]
+    public string? TitleError { get; set; }
+
+    [Parameter]
+    public string? DateError { get; set; }
+
+    [Parameter]
+    public string? StartError { get; set; }
+
+    [Parameter]
+    public string? EndError { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnClearError { get; set; }
+
+    [Parameter]
+    public EventCallback<AppointmentDraft> OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback<Appointment> OnOpen { get; set; }
+
+    [Parameter]
+    public EventCallback OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback OnAskDelete { get; set; }
+
+    [Parameter]
+    public EventCallback OnConfirmDelete { get; set; }
+
+    [Parameter]
+    public EventCallback OnKeep { get; set; }
+
+    [Parameter]
+    public EventCallback OnConfirmClear { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private string When
+    {
+        get
+        {
+            if (!CalendarText.TryParseTime(Start, out var start) || !CalendarText.TryParseTime(End, out var end))
+                return "";
+            return CalendarText.ClockRange(start, end, Use24Hour);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _self = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("northQuay.bindTrap", _trapId, _self);
+            if (Mode is not ("create" or "edit"))
+                await JS.InvokeVoidAsync("northQuay.focus", "#panel-close");
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+    }
+
+    [JSInvokable]
+    public Task CloseFromKey() => OnClose.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("northQuay.unbindTrap", _trapId);
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+
+        _self?.Dispose();
+    }
+}

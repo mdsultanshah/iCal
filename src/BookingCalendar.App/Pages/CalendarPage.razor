@@ -1,0 +1,445 @@
+@page "/"
+@implements IDisposable
+@inject AppointmentStore Store
+@inject IJSRuntime JS
+
+<PageTitle>Calendar</PageTitle>
+
+<div class="screen" data-theme="@(Store.Dark ? "dark" : "light")" @attributes="ModalAttributes">
+    <header class="top" data-header>
+        <h1 class="brand">Calendar</h1>
+        <div class="pager">
+            <button type="button" class="icon" aria-label="Previous month" @onclick="() => Go(-1)">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                    <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </button>
+            <h2 class="month-title">@CalendarText.Month(Store.Cursor) @Store.Cursor.Year</h2>
+            <button type="button" class="icon" aria-label="Next month" @onclick="() => Go(1)">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                    <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </button>
+            <button type="button" class="today" @onclick="GoToday">Today</button>
+        </div>
+        <div class="tools">
+            <div class="clock" role="group" aria-label="Time format">
+                <button type="button" aria-pressed="@Pressed(!Store.Use24Hour)" @onclick="() => Store.SetClockAsync(false)">12h</button>
+                <button type="button" aria-pressed="@Pressed(Store.Use24Hour)" @onclick="() => Store.SetClockAsync(true)">24h</button>
+            </div>
+            <button type="button" class="icon theme" aria-label="@(Store.Dark ? "Use light theme" : "Use dark theme")" @onclick="Store.ToggleThemeAsync">
+                @(Store.Dark ? "Light" : "Dark")
+            </button>
+            @if (Store.HasExamples)
+            {
+                <button type="button" class="ghost" @onclick="OpenClear">Clear examples</button>
+            }
+        </div>
+    </header>
+
+    <div class="board">
+        <MonthBoard Days="@CalendarRange.MonthGrid(Store.Cursor)"
+                    Appointments="Store.Appointments"
+                    Selected="Store.Cursor"
+                    Today="Store.Today"
+                    Use24Hour="Store.Use24Hour"
+                    OnDay="OpenQuick"
+                    OnArrow="MoveFocus"
+                    OnOpen="OpenDetails"
+                    OnMore="OpenList" />
+    </div>
+
+    @if (Store.Narrow)
+    {
+        <section class="day-list" aria-label="@CalendarText.DayTitle(Store.Cursor)">
+            <h2 class="day-heading">@CalendarText.DayTitle(Store.Cursor)</h2>
+            @if (SelectedItems.Count == 0)
+            {
+                <p class="empty">No appointments this day.</p>
+            }
+            else
+            {
+                <div class="appointments">
+                    @foreach (var item in SelectedItems)
+                    {
+                        <button type="button"
+                                class="appt"
+                                data-appointment="@item.Id"
+                                @onclick="() => OpenDetails(item)">
+                            <span class="appt-time">@CalendarText.ClockRange(item.Start, item.End, Store.Use24Hour)</span>
+                            <span class="appt-title">@item.Title</span>
+                            @if (item.IsExample)
+                            {
+                                <span class="badge" aria-hidden="true">Ex</span>
+                            }
+                        </button>
+                    }
+                </div>
+            }
+        </section>
+        <button type="button" id="add-appointment" class="add" aria-label="Add appointment" @onclick="() => OpenQuick(Store.Cursor)">
+            <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
+                <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+        </button>
+    }
+</div>
+
+@if (_quick is { } quick)
+{
+    <QuickAdd @key="quick.Key"
+              Date="quick.Date"
+              Start="@quick.Start"
+              Narrow="Store.Narrow"
+              OnSave="SaveQuick"
+              OnMore="OpenMore"
+              OnClose="CloseQuick" />
+}
+
+@if (_panel is { } panel)
+{
+    <DayPanel @key="panel.Key"
+              Mode="@panel.Mode"
+              Narrow="Store.Narrow"
+              Day="panel.Day"
+              Items="DayItems(panel.Day)"
+              Use24Hour="Store.Use24Hour"
+              FormKey="@panel.Key"
+              Id="@panel.Id"
+              Title="@panel.Title"
+              DateText="@panel.DateText"
+              Start="@panel.Start"
+              End="@panel.End"
+              Note="@panel.Note"
+              IsExample="@panel.IsExample"
+              TitleError="@_titleError"
+              DateError="@_dateError"
+              StartError="@_startError"
+              EndError="@_endError"
+              OnClearError="ClearOne"
+              OnSave="SaveForm"
+              OnOpen="OpenDetails"
+              OnEdit="BeginEdit"
+              OnAskDelete="AskDelete"
+              OnConfirmDelete="ConfirmDelete"
+              OnKeep="KeepAppointment"
+              OnConfirmClear="ConfirmClear"
+              OnClose="CloseAll" />
+}
+
+<div class="live" aria-live="polite" aria-atomic="true">
+    @if (Store.Toast is { } toast)
+    {
+        <p class="toast" data-toast>@toast</p>
+    }
+</div>
+
+@code {
+    private QuickOpen? _quick;
+    private PanelOpen? _panel;
+    private int _quickSerial;
+    private bool _focusDay;
+    private DateOnly _anchorDay;
+    private string? _titleError;
+    private string? _dateError;
+    private string? _startError;
+    private string? _endError;
+
+    private IReadOnlyList<Appointment> SelectedItems => DayItems(Store.Cursor);
+
+    private IReadOnlyDictionary<string, object>? ModalAttributes =>
+        _quick is null && _panel is null
+            ? null
+            : new Dictionary<string, object> { ["inert"] = true };
+
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusDay)
+            return;
+
+        _focusDay = false;
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "northQuay.focus",
+                $"[data-month-grid] [data-date='{CalendarText.DateValue(_anchorDay)}']");
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+    }
+
+    public void Dispose() => Store.Changed -= OnChanged;
+
+    private void OnChanged()
+    {
+        if (_panel is { Id: { } id, Mode: "details" or "edit" or "delete" } &&
+            Store.Appointments.All(item => item.Id != id))
+        {
+            _panel = null;
+            _focusDay = true;
+        }
+
+        try
+        {
+            _ = InvokeAsync(StateHasChanged);
+        }
+        catch (ObjectDisposedException)
+        {
+            // The page is going away.
+        }
+    }
+
+    private IReadOnlyList<Appointment> DayItems(DateOnly day) =>
+        DayAgenda.Ordered(Store.Appointments.Where(item => item.Date == day));
+
+    private void Go(int direction)
+    {
+        if (direction < 0)
+            Store.Previous();
+        else
+            Store.Next();
+
+        _anchorDay = Store.Cursor;
+        _focusDay = true;
+    }
+
+    private void GoToday()
+    {
+        Store.ShowToday();
+        _anchorDay = Store.Today;
+        _focusDay = true;
+    }
+
+    private void MoveFocus(DateOnly day)
+    {
+        _anchorDay = day;
+        _focusDay = true;
+        Store.Select(day);
+    }
+
+    private void OpenQuick(DateOnly day)
+    {
+        _anchorDay = day;
+        _panel = null;
+        ClearErrors();
+        var start = ClockFormat.Format(ClockFormat.NextFullHour(TimeOnly.FromDateTime(DateTime.Now)), true);
+        _quick = new QuickOpen(++_quickSerial, day, start);
+        Store.Select(day);
+    }
+
+    private void CloseQuick()
+    {
+        _quick = null;
+        _focusDay = true;
+        ClearErrors();
+    }
+
+    private async Task SaveQuick(QuickSave save)
+    {
+        if (_quick is not { } quick)
+            return;
+
+        var end = CalendarRange.DefaultEnd(save.Start);
+        var outcome = await Store.SaveAsync(null, save.Title, quick.Date, save.Start, end, "");
+        if (!outcome.Ok)
+            return;
+
+        _anchorDay = quick.Date;
+        _quick = null;
+        _focusDay = true;
+    }
+
+    private void OpenMore(QuickDraft draft)
+    {
+        if (_quick is not { } quick)
+            return;
+
+        if (!ClockFormat.TryParseHourMinute(draft.StartText, out var start))
+            start = ClockFormat.NextFullHour(TimeOnly.FromDateTime(DateTime.Now));
+
+        _anchorDay = quick.Date;
+        _quick = null;
+        ClearErrors();
+        _panel = new PanelOpen(
+            $"create-{CalendarText.DateValue(quick.Date)}-{_quickSerial}",
+            "create",
+            quick.Date,
+            null,
+            draft.Title,
+            CalendarText.DateValue(quick.Date),
+            CalendarText.Time(start),
+            CalendarText.Time(CalendarRange.DefaultEnd(start)),
+            "",
+            false);
+    }
+
+    private void OpenList(DateOnly day)
+    {
+        _anchorDay = day;
+        _quick = null;
+        ClearErrors();
+        _panel = new PanelOpen($"list-{CalendarText.DateValue(day)}", "list", day, null, "", "", "", "", "", false);
+        Store.Select(day);
+    }
+
+    private void OpenDetails(Appointment item)
+    {
+        _anchorDay = item.Date;
+        _quick = null;
+        ClearErrors();
+        _panel = PanelOpen.From(item);
+        Store.Select(item.Date);
+    }
+
+    private void BeginEdit()
+    {
+        if (_panel is not { } panel)
+            return;
+
+        ClearErrors();
+        _panel = panel with { Key = $"edit-{panel.Id}", Mode = "edit" };
+    }
+
+    private void AskDelete()
+    {
+        if (_panel is not { } panel)
+            return;
+
+        _panel = panel with { Key = $"delete-{panel.Id}", Mode = "delete" };
+    }
+
+    private void KeepAppointment()
+    {
+        if (_panel is not { } panel)
+            return;
+
+        _panel = panel with { Key = $"details-{panel.Id}", Mode = "details" };
+    }
+
+    private void OpenClear()
+    {
+        _anchorDay = Store.Cursor;
+        _quick = null;
+        ClearErrors();
+        _panel = new PanelOpen("clear", "clear", Store.Cursor, null, "", "", "", "", "", false);
+    }
+
+    private async Task SaveForm(AppointmentDraft draft)
+    {
+        var titleError = AppointmentRules.TitleError(draft.Title);
+        var dateOk = PrototypeOptions.TryParseDate(draft.Date, out var date);
+        var startOk = CalendarText.TryParseTime(draft.Start, out var start);
+        var endOk = CalendarText.TryParseTime(draft.End, out var end);
+        string? timeError = null;
+        if (startOk && endOk)
+            timeError = AppointmentRules.TimeOrderError(start, end);
+
+        if (titleError is not null || !dateOk || !startOk || !endOk || timeError is not null)
+        {
+            _titleError = titleError;
+            _dateError = dateOk ? null : "Enter a date.";
+            _startError = startOk ? null : "Enter a start.";
+            _endError = !endOk ? "Enter an end." : timeError;
+            return;
+        }
+
+        var before = Store.Appointments.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+        var outcome = await Store.SaveAsync(draft.Id, draft.Title, date, start, end, draft.Note);
+        if (!outcome.Ok)
+        {
+            _titleError = outcome.TitleError;
+            _endError = outcome.TimeError;
+            return;
+        }
+
+        var saved = outcome.Appointments.FirstOrDefault(item => item.Id == draft.Id)
+            ?? outcome.Appointments.First(item => !before.Contains(item.Id));
+        OpenDetails(saved);
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_panel?.Id is not { } id)
+            return;
+
+        _panel = null;
+        _focusDay = true;
+        await Store.DeleteAsync(id);
+    }
+
+    private async Task ConfirmClear()
+    {
+        _panel = null;
+        _focusDay = true;
+        await Store.ClearExamplesAsync();
+    }
+
+    private void CloseAll()
+    {
+        _quick = null;
+        _panel = null;
+        _focusDay = true;
+        ClearErrors();
+    }
+
+    private void ClearOne(string field)
+    {
+        switch (field)
+        {
+            case "title":
+                _titleError = null;
+                break;
+            case "date":
+                _dateError = null;
+                break;
+            case "start":
+                _startError = null;
+                break;
+            case "end":
+                _endError = null;
+                break;
+        }
+    }
+
+    private void ClearErrors()
+    {
+        _titleError = null;
+        _dateError = null;
+        _startError = null;
+        _endError = null;
+    }
+
+    private static string Pressed(bool on) => on ? "true" : "false";
+
+    private sealed record QuickOpen(int Key, DateOnly Date, string Start);
+
+    private sealed record PanelOpen(
+        string Key,
+        string Mode,
+        DateOnly Day,
+        string? Id,
+        string Title,
+        string DateText,
+        string Start,
+        string End,
+        string Note,
+        bool IsExample)
+    {
+        public static PanelOpen From(Appointment item) =>
+            new(
+                $"details-{item.Id}",
+                "details",
+                item.Date,
+                item.Id,
+                item.Title,
+                CalendarText.DateValue(item.Date),
+                CalendarText.Time(item.Start),
+                CalendarText.Time(item.End),
+                item.Note,
+                item.IsExample);
+    }
+}
