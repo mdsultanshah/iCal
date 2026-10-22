@@ -19,12 +19,8 @@ public sealed class AppointmentStore : IAsyncDisposable
     public DateOnly Cursor { get; private set; }
     public IReadOnlyList<Appointment> Appointments { get; private set; } = [];
     public string? Toast { get; private set; }
-    public string View { get; private set; } = "month";
     public bool Use24Hour { get; private set; } = true;
     public bool Dark { get; private set; }
-
-    public IReadOnlyList<DateOnly> VisibleDays =>
-        View == "day" ? [Cursor] : CalendarRange.Week(Cursor);
 
     public bool HasExamples => Appointments.Any(item => item.IsExample);
 
@@ -33,8 +29,6 @@ public sealed class AppointmentStore : IAsyncDisposable
     public async Task InitializeAsync(string uri)
     {
         var options = PrototypeOptions.Parse(uri);
-        if (options.View is "day" or "week" or "month")
-            View = options.View;
 
         var zone = await _js.InvokeAsync<ZoneInfo>("northQuay.zone");
         ZoneLabel = string.IsNullOrWhiteSpace(zone.TimeZone) ? "UTC" : zone.TimeZone;
@@ -85,15 +79,6 @@ public sealed class AppointmentStore : IAsyncDisposable
             return;
 
         Narrow = narrow;
-        Changed?.Invoke();
-    }
-
-    public void SetView(string view)
-    {
-        if (view is not ("month" or "week" or "day") || view == View)
-            return;
-
-        View = view;
         Changed?.Invoke();
     }
 
@@ -186,12 +171,7 @@ public sealed class AppointmentStore : IAsyncDisposable
 
     private void Move(int direction)
     {
-        Cursor = View switch
-        {
-            "day" => CalendarRange.Shift(Cursor, direction),
-            "week" => CalendarRange.Shift(Cursor, direction * 7),
-            _ => CalendarRange.ShiftMonth(Cursor, direction),
-        };
+        Cursor = CalendarRange.ShiftMonth(Cursor, direction);
         Changed?.Invoke();
     }
 

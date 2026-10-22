@@ -50,6 +50,16 @@ public static class CalendarRange
 
     public static DateOnly Shift(DateOnly date, int days) => date.AddDays(days);
 
+    /// <summary>Arrow keys move one day left or right, and one week up or down.</summary>
+    public static DateOnly MoveByArrow(DateOnly date, string? key) => key switch
+    {
+        "ArrowLeft" => date.AddDays(-1),
+        "ArrowRight" => date.AddDays(1),
+        "ArrowUp" => date.AddDays(-7),
+        "ArrowDown" => date.AddDays(7),
+        _ => date,
+    };
+
     public static DateOnly ShiftMonth(DateOnly date, int months) => date.AddMonths(months);
 
     public static IReadOnlyList<TimeOnly> Hours()

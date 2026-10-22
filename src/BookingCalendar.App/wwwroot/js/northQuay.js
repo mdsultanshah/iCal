@@ -2,7 +2,7 @@ window.northQuay = {
   _media: null,
   _onMedia: null,
   _month: null,
-  _escape: null,
+  _traps: {},
 
   load: function () {
     return localStorage.getItem("northquay.appointments.v1");
@@ -99,26 +99,67 @@ window.northQuay = {
       this._month = null;
     }
   },
-  bindEscape: function (ref) {
-    this.unbindEscape();
-    var handler = function (event) {
-      if (event.key !== "Escape") {
-        return;
-      }
-      var target = event.target;
-      if (target && target.closest && target.closest("[data-month-grid]")) {
-        return;
-      }
-      event.preventDefault();
-      ref.invokeMethodAsync("CloseFromKey");
+  anchor: function (iso) {
+    var node = document.querySelector("[data-month-grid] [data-date='" + iso + "']");
+    if (!node) {
+      return null;
+    }
+    var rect = node.getBoundingClientRect();
+    return {
+      top: rect.top,
+      left: rect.left,
+      right: rect.right,
+      bottom: rect.bottom,
+      viewWidth: window.innerWidth,
+      viewHeight: window.innerHeight
     };
-    this._escape = handler;
+  },
+  bindTrap: function (id, ref) {
+    this.unbindTrap(id);
+    var handler = function (event) {
+      var root = document.querySelector("[data-trap='" + id + "']");
+      if (!root) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        ref.invokeMethodAsync("CloseFromKey");
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      var nodes = root.querySelectorAll("button, [href], input, select, textarea");
+      var list = Array.prototype.filter.call(nodes, function (node) {
+        return !node.disabled && node.tabIndex !== -1;
+      });
+      if (!list.length) {
+        return;
+      }
+      var first = list[0];
+      var last = list[list.length - 1];
+      var inside = root.contains(document.activeElement);
+      if (!inside) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    this._traps[id] = handler;
     document.addEventListener("keydown", handler);
   },
-  unbindEscape: function () {
-    if (this._escape) {
-      document.removeEventListener("keydown", this._escape);
-      this._escape = null;
+  unbindTrap: function (id) {
+    var handler = this._traps[id];
+    if (handler) {
+      document.removeEventListener("keydown", handler);
+      delete this._traps[id];
     }
   }
 };

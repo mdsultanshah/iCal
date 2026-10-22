@@ -1,232 +1,131 @@
 @page "/"
-@implements IAsyncDisposable
+@implements IDisposable
 @inject AppointmentStore Store
 @inject IJSRuntime JS
 
-<PageTitle>Appointments · North Quay Studio</PageTitle>
+<PageTitle>Calendar</PageTitle>
 
-<div class="page" data-view="@Store.View" data-theme="@(Store.Dark ? "dark" : "light")">
-    <div class="card">
-        <header class="top" data-header>
-            <h1 class="brand">North Quay Studio</h1>
-            <div class="tools">
-                <div class="views" role="group" aria-label="Calendar view">
-                    <button type="button" aria-label="Month" aria-pressed="@Pressed(Store.View == "month")" @onclick='() => Store.SetView("month")'>
-                        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                            <rect x="1.5" y="1.5" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" />
-                            <rect x="9.5" y="1.5" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" />
-                            <rect x="1.5" y="9.5" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" />
-                            <rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" />
-                        </svg>
-                    </button>
-                    <button type="button" aria-label="Week" aria-pressed="@Pressed(Store.View == "week")" @onclick='() => Store.SetView("week")'>
-                        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                            <path d="M2 4.5h12M2 8h12M2 11.5h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                        </svg>
-                    </button>
-                    <button type="button" aria-label="Day" aria-pressed="@Pressed(Store.View == "day")" @onclick='() => Store.SetView("day")'>
-                        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                            <rect x="5" y="1.5" width="6" height="13" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" />
-                        </svg>
-                    </button>
-                </div>
-                <button type="button" class="icon theme" aria-label="@(Store.Dark ? "Use light theme" : "Use dark theme")" @onclick="Store.ToggleThemeAsync">
-                    @if (Store.Dark)
-                    {
-                        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                            <circle cx="8" cy="8" r="2.4" fill="none" stroke="currentColor" stroke-width="1.5" />
-                            <path d="M8 1.4v1.8M8 12.8v1.8M1.4 8h1.8M12.8 8h1.8M3.2 3.2l1.3 1.3M11.5 11.5l1.3 1.3M3.2 12.8l1.3-1.3M11.5 4.5l1.3-1.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                        </svg>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                            <path d="M9.2 2.1a5.4 5.4 0 1 0 4.6 8.4A4.5 4.5 0 0 1 9.2 2.1z" fill="currentColor" />
-                        </svg>
-                    }
-                </button>
+<div class="screen" data-theme="@(Store.Dark ? "dark" : "light")" @attributes="ModalAttributes">
+    <header class="top" data-header>
+        <h1 class="brand">Calendar</h1>
+        <div class="pager">
+            <button type="button" class="icon" aria-label="Previous month" @onclick="() => Go(-1)">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                    <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </button>
+            <h2 class="month-title">@CalendarText.Month(Store.Cursor) @Store.Cursor.Year</h2>
+            <button type="button" class="icon" aria-label="Next month" @onclick="() => Go(1)">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                    <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </button>
+            <button type="button" class="today" @onclick="GoToday">Today</button>
+        </div>
+        <div class="tools">
+            <div class="clock" role="group" aria-label="Time format">
+                <button type="button" aria-pressed="@Pressed(!Store.Use24Hour)" @onclick="() => Store.SetClockAsync(false)">12h</button>
+                <button type="button" aria-pressed="@Pressed(Store.Use24Hour)" @onclick="() => Store.SetClockAsync(true)">24h</button>
             </div>
-        </header>
-
-        <div class="columns @(Store.View == "month" ? "is-month" : "is-hours")">
-            <section class="details" data-panel="@Mode" aria-labelledby="panel-title">
-                @if (Mode == "delete")
-                {
-                    <h2 id="panel-title">Delete this appointment?</h2>
-                    <div class="actions">
-                        <button type="button" id="keep-appointment" class="ghost" @onclick="Close">Keep</button>
-                        <button type="button" id="confirm-delete" class="danger" @onclick="ConfirmDelete">Delete</button>
-                    </div>
-                }
-                else if (Mode == "clear")
-                {
-                    <h2 id="panel-title">Clear example appointments?</h2>
-                    <p class="note">This removes the sample appointments. Appointments you added stay.</p>
-                    <div class="actions">
-                        <button type="button" id="keep-examples" class="ghost" @onclick="Close">Keep</button>
-                        <button type="button" id="confirm-clear" class="danger" @onclick="ConfirmClear">Clear examples</button>
-                    </div>
-                }
-                else if (_panel is { Mode: "create" or "edit" } panel)
-                {
-                    <AppointmentEditor @key="panel.Key"
-                                      Mode="@panel.Mode"
-                                      Id="@panel.Id"
-                                      Title="@panel.Title"
-                                      Date="@panel.Date"
-                                      Start="@panel.Start"
-                                      End="@panel.End"
-                                      Note="@panel.Note"
-                                      IsExample="@panel.IsExample"
-                                      TitleError="@_titleError"
-                                      DateError="@_dateError"
-                                      StartError="@_startError"
-                                      EndError="@_endError"
-                                      OnClearError="ClearOne"
-                                      OnSave="Save"
-                                      OnCancel="Close" />
-                }
-                else if (Mode == "details" && _selected is { } item)
-                {
-                    <h2 id="panel-title">@item.Title</h2>
-                    @if (item.IsExample)
-                    {
-                        <p class="example-flag"><span class="badge" aria-label="Example">Ex</span></p>
-                    }
-                    <p class="when">@CalendarText.FullDate(item.Date)</p>
-                    <p class="when">@CalendarText.ClockRange(item.Start, item.End, Store.Use24Hour)</p>
-                    <p class="note">@(string.IsNullOrWhiteSpace(item.Note) ? "No notes." : item.Note)</p>
-                    <div class="actions">
-                        <button type="button" id="edit-appointment" class="ghost" @onclick="BeginEdit">Edit</button>
-                        <button type="button" id="delete-appointment" class="danger" @onclick="AskDelete">Delete</button>
-                    </div>
-                    @if (Store.HasExamples)
-                    {
-                        <button type="button" class="ghost clear" @onclick="OpenClear">Clear examples</button>
-                    }
-                }
-                else
-                {
-                    <h2 id="panel-title">Appointments</h2>
-                    <p class="note">Select an appointment, or create one.</p>
-                    @if (Store.HasExamples)
-                    {
-                        <button type="button" class="ghost clear" @onclick="OpenClear">Clear examples</button>
-                    }
-                }
-                <p class="zone">@Store.ZoneLabel</p>
-            </section>
-
-            @if (Store.View == "month")
+            <button type="button" class="icon theme" aria-label="@(Store.Dark ? "Use light theme" : "Use dark theme")" @onclick="Store.ToggleThemeAsync">
+                @(Store.Dark ? "Light" : "Dark")
+            </button>
+            @if (Store.HasExamples)
             {
-                <section class="month">
-                    <div class="month-head">
-                        <h2 class="month-title">
-                            <span class="month-name">@CalendarText.Month(Store.Cursor)</span>
-                            <span class="year">@Store.Cursor.Year</span>
-                        </h2>
-                        <div class="pager">
-                            <button type="button" class="icon" aria-label="Previous month" @onclick="Store.Previous">
-                                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                                    <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                                </svg>
-                            </button>
-                            <button type="button" class="today" @onclick="Store.ShowToday">Today</button>
-                            <button type="button" class="icon" aria-label="Next month" @onclick="Store.Next">
-                                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                                    <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <MonthGrid Days="@CalendarRange.MonthGrid(Store.Cursor)"
-                               Appointments="Store.Appointments"
-                               Selected="Store.Cursor"
-                               Today="Store.Today"
-                               OnSelect="SelectDay" />
-                </section>
-                <section class="daylist">
-                    <div class="day-tools" @onclick:stopPropagation="true">
-                        <div class="clock" role="group" aria-label="Time format">
-                            <button type="button" aria-pressed="@Pressed(!Store.Use24Hour)" @onclick="() => Store.SetClockAsync(false)">12h</button>
-                            <button type="button" aria-pressed="@Pressed(Store.Use24Hour)" @onclick="() => Store.SetClockAsync(true)">24h</button>
-                        </div>
-                        <button type="button" id="new-appointment" class="primary" @onclick="OpenNew">
-                            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                                <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                            </svg>
-                            New appointment
-                        </button>
-                    </div>
-                    <h2 class="day-heading">@CalendarText.DayTitle(Store.Cursor)</h2>
-                    <div class="appointments" @onclick="ListBackground">
-                        @if (DayAppointments.Count == 0)
-                        {
-                            <p class="empty">No appointments this day.</p>
-                        }
-                        else
-                        {
-                            @foreach (var item in DayAppointments)
-                            {
-                                <button type="button"
-                                        class="appt"
-                                        data-appointment="@item.Id"
-                                        aria-label="@ListLabel(item)"
-                                        @onclick="() => OpenAppointment(item)"
-                                        @onclick:stopPropagation="true">
-                                    <span class="appt-time">@CalendarText.ClockRange(item.Start, item.End, Store.Use24Hour)</span>
-                                    <span class="appt-title">@item.Title</span>
-                                    @if (item.IsExample)
-                                    {
-                                        <span class="badge" aria-hidden="true">Ex</span>
-                                    }
-                                </button>
-                            }
-                        }
-                    </div>
-                </section>
+                <button type="button" class="ghost" @onclick="OpenClear">Clear examples</button>
+            }
+        </div>
+    </header>
+
+    <div class="board">
+        <MonthBoard Days="@CalendarRange.MonthGrid(Store.Cursor)"
+                    Appointments="Store.Appointments"
+                    Selected="Store.Cursor"
+                    Today="Store.Today"
+                    Use24Hour="Store.Use24Hour"
+                    OnDay="OpenQuick"
+                    OnArrow="MoveFocus"
+                    OnOpen="OpenDetails"
+                    OnMore="OpenList" />
+    </div>
+
+    @if (Store.Narrow)
+    {
+        <section class="day-list" aria-label="@CalendarText.DayTitle(Store.Cursor)">
+            <h2 class="day-heading">@CalendarText.DayTitle(Store.Cursor)</h2>
+            @if (SelectedItems.Count == 0)
+            {
+                <p class="empty">No appointments this day.</p>
             }
             else
             {
-                <section class="hours">
-                    <div class="hours-head">
-                        <div class="pager">
-                            <button type="button" class="icon" aria-label="@PreviousLabel" @onclick="Store.Previous">
-                                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                                    <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                                </svg>
-                            </button>
-                            <button type="button" class="today" @onclick="Store.ShowToday">Today</button>
-                            <button type="button" class="icon" aria-label="@NextLabel" @onclick="Store.Next">
-                                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                                    <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                                </svg>
-                            </button>
-                        </div>
-                        <h2 class="hours-title">@HoursTitle</h2>
-                        <div class="clock" role="group" aria-label="Time format">
-                            <button type="button" aria-pressed="@Pressed(!Store.Use24Hour)" @onclick="() => Store.SetClockAsync(false)">12h</button>
-                            <button type="button" aria-pressed="@Pressed(Store.Use24Hour)" @onclick="() => Store.SetClockAsync(true)">24h</button>
-                        </div>
-                        <button type="button" id="new-appointment" class="primary" @onclick="OpenNew">
-                            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                                <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                            </svg>
-                            New appointment
+                <div class="appointments">
+                    @foreach (var item in SelectedItems)
+                    {
+                        <button type="button"
+                                class="appt"
+                                data-appointment="@item.Id"
+                                @onclick="() => OpenDetails(item)">
+                            <span class="appt-time">@CalendarText.ClockRange(item.Start, item.End, Store.Use24Hour)</span>
+                            <span class="appt-title">@item.Title</span>
+                            @if (item.IsExample)
+                            {
+                                <span class="badge" aria-hidden="true">Ex</span>
+                            }
                         </button>
-                    </div>
-                    <AppointmentGrid Days="Store.VisibleDays"
-                                     Appointments="Store.Appointments"
-                                     Today="Store.Today"
-                                     Selected="Store.Cursor"
-                                     Use24Hour="Store.Use24Hour"
-                                     OnSlot="OpenSlot"
-                                     OnOpen="OpenAppointment" />
-                </section>
+                    }
+                </div>
             }
-        </div>
-    </div>
+        </section>
+        <button type="button" id="add-appointment" class="add" aria-label="Add appointment" @onclick="() => OpenQuick(Store.Cursor)">
+            <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
+                <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+        </button>
+    }
 </div>
+
+@if (_quick is { } quick)
+{
+    <QuickAdd @key="quick.Key"
+              Date="quick.Date"
+              Start="@quick.Start"
+              Narrow="Store.Narrow"
+              OnSave="SaveQuick"
+              OnMore="OpenMore"
+              OnClose="CloseQuick" />
+}
+
+@if (_panel is { } panel)
+{
+    <DayPanel @key="panel.Key"
+              Mode="@panel.Mode"
+              Narrow="Store.Narrow"
+              Day="panel.Day"
+              Items="DayItems(panel.Day)"
+              Use24Hour="Store.Use24Hour"
+              FormKey="@panel.Key"
+              Id="@panel.Id"
+              Title="@panel.Title"
+              DateText="@panel.DateText"
+              Start="@panel.Start"
+              End="@panel.End"
+              Note="@panel.Note"
+              IsExample="@panel.IsExample"
+              TitleError="@_titleError"
+              DateError="@_dateError"
+              StartError="@_startError"
+              EndError="@_endError"
+              OnClearError="ClearOne"
+              OnSave="SaveForm"
+              OnOpen="OpenDetails"
+              OnEdit="BeginEdit"
+              OnAskDelete="AskDelete"
+              OnConfirmDelete="ConfirmDelete"
+              OnKeep="KeepAppointment"
+              OnConfirmClear="ConfirmClear"
+              OnClose="CloseAll" />
+}
 
 <div class="live" aria-live="polite" aria-atomic="true">
     @if (Store.Toast is { } toast)
@@ -236,92 +135,52 @@
 </div>
 
 @code {
-    private PanelRequest? _panel;
-    private Appointment? _selected;
+    private QuickOpen? _quick;
+    private PanelOpen? _panel;
+    private int _quickSerial;
+    private bool _focusDay;
+    private DateOnly _anchorDay;
     private string? _titleError;
     private string? _dateError;
     private string? _startError;
     private string? _endError;
-    private bool _focusKeep;
-    private bool _focusNew;
-    private bool _escapeBound;
-    private DotNetObjectReference<CalendarPage>? _self;
 
-    private string Mode => _panel?.Mode ?? "idle";
+    private IReadOnlyList<Appointment> SelectedItems => DayItems(Store.Cursor);
 
-    private IReadOnlyList<Appointment> DayAppointments =>
-        Store.Appointments
-            .Where(item => item.Date == Store.Cursor)
-            .OrderBy(item => item.Start)
-            .ThenBy(item => item.Id, StringComparer.Ordinal)
-            .ToList();
-
-    private string HoursTitle =>
-        Store.View == "day"
-            ? CalendarText.DayTitle(Store.Cursor)
-            : CalendarText.WeekTitle(Store.VisibleDays);
-
-    private string PreviousLabel => Store.View == "day" ? "Previous day" : "Previous week";
-
-    private string NextLabel => Store.View == "day" ? "Next day" : "Next week";
+    private IReadOnlyDictionary<string, object>? ModalAttributes =>
+        _quick is null && _panel is null
+            ? null
+            : new Dictionary<string, object> { ["inert"] = true };
 
     protected override void OnInitialized() => Store.Changed += OnChanged;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await SyncEscapeAsync();
+        if (!_focusDay)
+            return;
 
-        if (_focusKeep)
-        {
-            _focusKeep = false;
-            var selector = Mode == "clear" ? "#keep-examples" : "#keep-appointment";
-            await FocusAsync(selector);
-        }
-
-        if (_focusNew)
-        {
-            _focusNew = false;
-            await FocusAsync("#new-appointment");
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        Store.Changed -= OnChanged;
+        _focusDay = false;
         try
         {
-            await JS.InvokeVoidAsync("northQuay.unbindEscape");
+            await JS.InvokeVoidAsync(
+                "northQuay.focus",
+                $"[data-month-grid] [data-date='{CalendarText.DateValue(_anchorDay)}']");
         }
         catch (JSException)
         {
             // The page is going away.
         }
-
-        _self?.Dispose();
     }
 
-    [JSInvokable]
-    public void CloseFromKey()
-    {
-        Close();
-        StateHasChanged();
-    }
+    public void Dispose() => Store.Changed -= OnChanged;
 
     private void OnChanged()
     {
-        if (_selected is { } selected)
+        if (_panel is { Id: { } id, Mode: "details" or "edit" or "delete" } &&
+            Store.Appointments.All(item => item.Id != id))
         {
-            var fresh = Store.Appointments.FirstOrDefault(item => item.Id == selected.Id);
-            if (fresh is null)
-            {
-                _selected = null;
-                if (_panel?.Mode is "details" or "edit" or "delete")
-                    _panel = null;
-            }
-            else
-            {
-                _selected = fresh;
-            }
+            _panel = null;
+            _focusDay = true;
         }
 
         try
@@ -334,102 +193,142 @@
         }
     }
 
-    private void SelectDay(DateOnly date)
-    {
-        var cleared = false;
-        if (_selected is { } item && item.Date != date)
-        {
-            _selected = null;
-            if (_panel?.Mode is "details" or "edit" or "delete")
-            {
-                _panel = null;
-                cleared = true;
-            }
-        }
+    private IReadOnlyList<Appointment> DayItems(DateOnly day) =>
+        DayAgenda.Ordered(Store.Appointments.Where(item => item.Date == day));
 
-        var moved = Store.Cursor != date;
-        Store.Select(date);
-        if (cleared && !moved)
-            StateHasChanged();
+    private void Go(int direction)
+    {
+        if (direction < 0)
+            Store.Previous();
+        else
+            Store.Next();
+
+        _anchorDay = Store.Cursor;
+        _focusDay = true;
     }
 
-    private void ListBackground()
+    private void GoToday()
     {
-        if (Store.Narrow)
-            OpenNew();
+        Store.ShowToday();
+        _anchorDay = Store.Today;
+        _focusDay = true;
     }
 
-    private void OpenSlot(SlotChoice choice)
+    private void MoveFocus(DateOnly day)
     {
-        var start = new TimeOnly(choice.Hour, 0);
-        Store.Select(choice.Date);
-        Open(new PanelRequest(
-            $"create-{CalendarText.DateValue(choice.Date)}-{choice.Hour}",
+        _anchorDay = day;
+        _focusDay = true;
+        Store.Select(day);
+    }
+
+    private void OpenQuick(DateOnly day)
+    {
+        _anchorDay = day;
+        _panel = null;
+        ClearErrors();
+        var start = ClockFormat.Format(ClockFormat.NextFullHour(TimeOnly.FromDateTime(DateTime.Now)), true);
+        _quick = new QuickOpen(++_quickSerial, day, start);
+        Store.Select(day);
+    }
+
+    private void CloseQuick()
+    {
+        _quick = null;
+        _focusDay = true;
+        ClearErrors();
+    }
+
+    private async Task SaveQuick(QuickSave save)
+    {
+        if (_quick is not { } quick)
+            return;
+
+        var end = CalendarRange.DefaultEnd(save.Start);
+        var outcome = await Store.SaveAsync(null, save.Title, quick.Date, save.Start, end, "");
+        if (!outcome.Ok)
+            return;
+
+        _anchorDay = quick.Date;
+        _quick = null;
+        _focusDay = true;
+    }
+
+    private void OpenMore(QuickDraft draft)
+    {
+        if (_quick is not { } quick)
+            return;
+
+        if (!ClockFormat.TryParseHourMinute(draft.StartText, out var start))
+            start = ClockFormat.NextFullHour(TimeOnly.FromDateTime(DateTime.Now));
+
+        _anchorDay = quick.Date;
+        _quick = null;
+        ClearErrors();
+        _panel = new PanelOpen(
+            $"create-{CalendarText.DateValue(quick.Date)}-{_quickSerial}",
             "create",
+            quick.Date,
             null,
-            "",
-            CalendarText.DateValue(choice.Date),
+            draft.Title,
+            CalendarText.DateValue(quick.Date),
             CalendarText.Time(start),
             CalendarText.Time(CalendarRange.DefaultEnd(start)),
             "",
-            false));
+            false);
     }
 
-    private void OpenNew()
+    private void OpenList(DateOnly day)
     {
-        var start = new TimeOnly(9, 0);
-        Open(new PanelRequest(
-            $"create-button-{CalendarText.DateValue(Store.Cursor)}",
-            "create",
-            null,
-            "",
-            CalendarText.DateValue(Store.Cursor),
-            CalendarText.Time(start),
-            CalendarText.Time(CalendarRange.DefaultEnd(start)),
-            "",
-            false));
+        _anchorDay = day;
+        _quick = null;
+        ClearErrors();
+        _panel = new PanelOpen($"list-{CalendarText.DateValue(day)}", "list", day, null, "", "", "", "", "", false);
+        Store.Select(day);
     }
 
-    private void OpenAppointment(Appointment item)
+    private void OpenDetails(Appointment item)
     {
+        _anchorDay = item.Date;
+        _quick = null;
+        ClearErrors();
+        _panel = PanelOpen.From(item);
         Store.Select(item.Date);
-        _selected = item;
-        Open(DetailsRequest(item));
     }
 
     private void BeginEdit()
     {
-        if (_selected is not { } item)
+        if (_panel is not { } panel)
             return;
 
-        Open(new PanelRequest(
-            $"edit-{item.Id}",
-            "edit",
-            item.Id,
-            item.Title,
-            CalendarText.DateValue(item.Date),
-            CalendarText.Time(item.Start),
-            CalendarText.Time(item.End),
-            item.Note,
-            item.IsExample));
-    }
-
-    private void OpenClear()
-    {
-        _focusKeep = true;
-        Open(new PanelRequest("clear", "clear", null, "", "", "", "", "", false));
+        ClearErrors();
+        _panel = panel with { Key = $"edit-{panel.Id}", Mode = "edit" };
     }
 
     private void AskDelete()
     {
-        if (_selected is not { } item)
+        if (_panel is not { } panel)
             return;
 
-        _focusKeep = true;
-        Open(new PanelRequest($"delete-{item.Id}", "delete", item.Id, item.Title, "", "", "", "", item.IsExample));
+        _panel = panel with { Key = $"delete-{panel.Id}", Mode = "delete" };
     }
 
-    private async Task Save(AppointmentDraft draft)
+    private void KeepAppointment()
+    {
+        if (_panel is not { } panel)
+            return;
+
+        _panel = panel with { Key = $"details-{panel.Id}", Mode = "details" };
+    }
+
+    private void OpenClear()
+    {
+        _anchorDay = Store.Cursor;
+        _quick = null;
+        ClearErrors();
+        _panel = new PanelOpen("clear", "clear", Store.Cursor, null, "", "", "", "", "", false);
+    }
+
+    private async Task SaveForm(AppointmentDraft draft)
     {
         var titleError = AppointmentRules.TitleError(draft.Title);
         var dateOk = PrototypeOptions.TryParseDate(draft.Date, out var date);
@@ -459,9 +358,7 @@
 
         var saved = outcome.Appointments.FirstOrDefault(item => item.Id == draft.Id)
             ?? outcome.Appointments.First(item => !before.Contains(item.Id));
-        _selected = saved;
-        Store.Select(saved.Date);
-        Open(DetailsRequest(saved));
+        OpenDetails(saved);
     }
 
     private async Task ConfirmDelete()
@@ -470,48 +367,24 @@
             return;
 
         _panel = null;
-        _selected = null;
-        _focusNew = true;
+        _focusDay = true;
         await Store.DeleteAsync(id);
     }
 
     private async Task ConfirmClear()
     {
         _panel = null;
-        _focusNew = true;
+        _focusDay = true;
         await Store.ClearExamplesAsync();
     }
 
-    private void Close()
+    private void CloseAll()
     {
-        ClearErrors();
-        if (_panel?.Mode is "edit" or "delete" or "clear" && _selected is not null)
-        {
-            Open(DetailsRequest(_selected));
-            return;
-        }
-
+        _quick = null;
         _panel = null;
-        _focusNew = true;
-    }
-
-    private void Open(PanelRequest request)
-    {
+        _focusDay = true;
         ClearErrors();
-        _panel = request;
     }
-
-    private static PanelRequest DetailsRequest(Appointment item) =>
-        new(
-            $"details-{item.Id}",
-            "details",
-            item.Id,
-            item.Title,
-            CalendarText.DateValue(item.Date),
-            CalendarText.Time(item.Start),
-            CalendarText.Time(item.End),
-            item.Note,
-            item.IsExample);
 
     private void ClearOne(string field)
     {
@@ -540,60 +413,33 @@
         _endError = null;
     }
 
-    private string ListLabel(Appointment item)
-    {
-        var kind = item.IsExample ? "Example. " : "";
-        return $"{kind}{item.Title}, {CalendarText.ClockRange(item.Start, item.End, Store.Use24Hour)}";
-    }
-
     private static string Pressed(bool on) => on ? "true" : "false";
 
-    private async Task SyncEscapeAsync()
-    {
-        var open = _panel is not null && Mode is not "details";
-        if (open == _escapeBound)
-            return;
+    private sealed record QuickOpen(int Key, DateOnly Date, string Start);
 
-        try
-        {
-            if (open)
-            {
-                _self ??= DotNetObjectReference.Create(this);
-                await JS.InvokeVoidAsync("northQuay.bindEscape", _self);
-            }
-            else
-            {
-                await JS.InvokeVoidAsync("northQuay.unbindEscape");
-            }
-
-            _escapeBound = open;
-        }
-        catch (JSException)
-        {
-            // The page is going away.
-        }
-    }
-
-    private async Task FocusAsync(string selector)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("northQuay.focus", selector);
-        }
-        catch (JSException)
-        {
-            // The page is going away.
-        }
-    }
-
-    private sealed record PanelRequest(
+    private sealed record PanelOpen(
         string Key,
         string Mode,
+        DateOnly Day,
         string? Id,
         string Title,
-        string Date,
+        string DateText,
         string Start,
         string End,
         string Note,
-        bool IsExample);
+        bool IsExample)
+    {
+        public static PanelOpen From(Appointment item) =>
+            new(
+                $"details-{item.Id}",
+                "details",
+                item.Date,
+                item.Id,
+                item.Title,
+                CalendarText.DateValue(item.Date),
+                CalendarText.Time(item.Start),
+                CalendarText.Time(item.End),
+                item.Note,
+                item.IsExample);
+    }
 }

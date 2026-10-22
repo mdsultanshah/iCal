@@ -315,3 +315,71 @@ public class CalendarRangeTests
         Assert.Equal("10:00 AM–11:30 AM", ClockFormat.Range(new TimeOnly(10, 0), new TimeOnly(11, 30), false));
     }
 }
+
+public class DayAgendaTests
+{
+    private static Appointment At(string id, int hour, int minute, string title) =>
+        new(id, title, new DateOnly(2026, 10, 22), new TimeOnly(hour, minute), new TimeOnly(hour + 1, minute), "", false);
+
+    [Fact]
+    public void A_day_shows_three_appointments_and_labels_the_rest()
+    {
+        var items = new[]
+        {
+            At("c", 12, 0, "C"),
+            At("a", 9, 0, "A"),
+            At("e", 16, 0, "E"),
+            At("b", 10, 0, "B"),
+            At("d", 15, 0, "D"),
+        };
+
+        var chips = DayAgenda.Chips(items);
+        Assert.Equal(["a", "b", "c"], chips.Select(item => item.Id));
+        Assert.Equal(2, DayAgenda.MoreCount(items.Length));
+        Assert.Equal("+2 more", DayAgenda.MoreLabel(items.Length));
+        Assert.Equal("+1 more", DayAgenda.MoreLabel(4));
+        Assert.Null(DayAgenda.MoreLabel(3));
+        Assert.Null(DayAgenda.MoreLabel(0));
+        Assert.Equal("09:00 A", DayAgenda.ChipText(chips[0], true));
+        Assert.Equal("9:00 AM A", DayAgenda.ChipText(chips[0], false));
+    }
+
+    [Fact]
+    public void Next_full_hour_rounds_up_and_stays_inside_the_day()
+    {
+        Assert.Equal(new TimeOnly(10, 0), ClockFormat.NextFullHour(new TimeOnly(10, 0)));
+        Assert.Equal(new TimeOnly(11, 0), ClockFormat.NextFullHour(new TimeOnly(10, 1)));
+        Assert.Equal(new TimeOnly(11, 0), ClockFormat.NextFullHour(new TimeOnly(10, 59, 59)));
+        Assert.Equal(new TimeOnly(0, 0), ClockFormat.NextFullHour(new TimeOnly(0, 0)));
+        Assert.Equal(new TimeOnly(23, 0), ClockFormat.NextFullHour(new TimeOnly(23, 0)));
+        Assert.Equal(new TimeOnly(23, 0), ClockFormat.NextFullHour(new TimeOnly(23, 15)));
+    }
+
+    [Fact]
+    public void Hour_minute_text_accepts_only_a_real_hh_mm()
+    {
+        Assert.True(ClockFormat.TryParseHourMinute("09:05", out var morning));
+        Assert.Equal(new TimeOnly(9, 5), morning);
+        Assert.True(ClockFormat.TryParseHourMinute(" 00:00 ", out _));
+        Assert.True(ClockFormat.TryParseHourMinute("23:59", out _));
+        Assert.False(ClockFormat.TryParseHourMinute("9:05", out _));
+        Assert.False(ClockFormat.TryParseHourMinute("24:00", out _));
+        Assert.False(ClockFormat.TryParseHourMinute("12:60", out _));
+        Assert.False(ClockFormat.TryParseHourMinute("10:00:00", out _));
+        Assert.False(ClockFormat.TryParseHourMinute("", out _));
+        Assert.False(ClockFormat.TryParseHourMinute("not-a-time", out _));
+        Assert.Equal("Enter a time as HH:mm.", ClockFormat.HourMinuteError);
+    }
+
+    [Fact]
+    public void Arrow_keys_move_by_a_day_or_a_week()
+    {
+        var day = new DateOnly(2026, 10, 21);
+        Assert.Equal(new DateOnly(2026, 10, 20), CalendarRange.MoveByArrow(day, "ArrowLeft"));
+        Assert.Equal(new DateOnly(2026, 10, 22), CalendarRange.MoveByArrow(day, "ArrowRight"));
+        Assert.Equal(new DateOnly(2026, 10, 14), CalendarRange.MoveByArrow(day, "ArrowUp"));
+        Assert.Equal(new DateOnly(2026, 10, 28), CalendarRange.MoveByArrow(day, "ArrowDown"));
+        Assert.Equal(day, CalendarRange.MoveByArrow(day, "Enter"));
+        Assert.Equal(new DateOnly(2026, 11, 1), CalendarRange.MoveByArrow(new DateOnly(2026, 10, 31), "ArrowRight"));
+    }
+}
