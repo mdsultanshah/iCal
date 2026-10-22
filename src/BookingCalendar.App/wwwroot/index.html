@@ -3,6 +3,16 @@
 
 <head>
     <meta charset="utf-8" />
+    <script>
+        (function () {
+            var theme = null;
+            try { theme = localStorage.getItem("northquay.theme.v1"); } catch (error) { theme = null; }
+            if (theme !== "light" && theme !== "dark") {
+                theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            }
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#111111" />
     <title>Appointments · North Quay Studio</title>

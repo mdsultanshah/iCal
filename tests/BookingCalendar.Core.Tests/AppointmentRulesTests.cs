@@ -189,15 +189,79 @@ public class OverlapLayoutTests
 public class CalendarRangeTests
 {
     [Fact]
-    public void Week_containing_wednesday_21_october_2026_starts_on_sunday()
+    public void Week_containing_wednesday_21_october_2026_starts_on_monday()
     {
         var today = new DateOnly(2026, 10, 21);
         var week = CalendarRange.Week(today);
-        Assert.Equal(new DateOnly(2026, 10, 18), week[0]);
-        Assert.Equal(new DateOnly(2026, 10, 24), week[6]);
+        Assert.Equal(new DateOnly(2026, 10, 19), week[0]);
+        Assert.Equal(DayOfWeek.Monday, week[0].DayOfWeek);
+        Assert.Equal(new DateOnly(2026, 10, 25), week[6]);
+        Assert.Equal(DayOfWeek.Sunday, week[6].DayOfWeek);
         Assert.Equal(7, week.Count);
         Assert.Contains(today, week);
-        Assert.Equal(new DateOnly(2026, 10, 25), CalendarRange.Shift(week[0], 7));
+        Assert.Equal(new DateOnly(2026, 10, 26), CalendarRange.Shift(week[0], 7));
+    }
+
+    [Fact]
+    public void October_2026_month_grid_has_five_weeks_and_leading_days()
+    {
+        var days = CalendarRange.MonthGrid(new DateOnly(2026, 10, 21));
+        Assert.Equal(35, days.Count);
+        Assert.Equal(5, days.Count / 7);
+        Assert.Equal(new DateOnly(2026, 9, 28), days[0]);
+        Assert.Equal(DayOfWeek.Monday, days[0].DayOfWeek);
+        Assert.Equal(new DateOnly(2026, 11, 1), days[^1]);
+        Assert.Equal(DayOfWeek.Sunday, days[^1].DayOfWeek);
+        Assert.Equal(31, days.Count(day => CalendarRange.InMonth(day, new DateOnly(2026, 10, 1))));
+        Assert.False(CalendarRange.InMonth(days[0], new DateOnly(2026, 10, 1)));
+    }
+
+    [Fact]
+    public void A_month_that_starts_on_sunday_uses_six_week_rows()
+    {
+        var november = new DateOnly(2026, 11, 1);
+        Assert.Equal(DayOfWeek.Sunday, november.DayOfWeek);
+        var days = CalendarRange.MonthGrid(november);
+        Assert.Equal(42, days.Count);
+        Assert.Equal(6, days.Count / 7);
+        Assert.Equal(DayOfWeek.Monday, days[0].DayOfWeek);
+        Assert.Equal(6, days.ToList().IndexOf(november));
+        Assert.Equal(30, days.Count(day => CalendarRange.InMonth(day, november)));
+    }
+
+    [Fact]
+    public void February_in_a_leap_year_includes_the_29th()
+    {
+        var leap = CalendarRange.MonthGrid(new DateOnly(2024, 2, 1));
+        Assert.Contains(new DateOnly(2024, 2, 29), leap);
+        Assert.Equal(29, leap.Count(day => day.Month == 2 && day.Year == 2024));
+        Assert.Equal(5, leap.Count / 7);
+
+        var common = CalendarRange.MonthGrid(new DateOnly(2025, 2, 1));
+        Assert.DoesNotContain(common, day => day is { Year: 2025, Month: 2, Day: 29 });
+        Assert.Equal(28, common.Count(day => day.Month == 2 && day.Year == 2025));
+    }
+
+    [Fact]
+    public void Month_navigation_moves_by_one_month()
+    {
+        Assert.Equal(new DateOnly(2026, 11, 21), CalendarRange.ShiftMonth(new DateOnly(2026, 10, 21), 1));
+        Assert.Equal(new DateOnly(2026, 9, 21), CalendarRange.ShiftMonth(new DateOnly(2026, 10, 21), -1));
+        Assert.Equal(new DateOnly(2026, 2, 28), CalendarRange.ShiftMonth(new DateOnly(2026, 1, 31), 1));
+    }
+
+    [Fact]
+    public void Day_access_name_includes_the_full_date_and_the_count()
+    {
+        Assert.Equal(
+            "Wednesday 21 October 2026, 0 appointments",
+            CalendarLabel.DayAccessName(new DateOnly(2026, 10, 21), 0));
+        Assert.Equal(
+            "Thursday 22 October 2026, 1 appointment",
+            CalendarLabel.DayAccessName(new DateOnly(2026, 10, 22), 1));
+        Assert.Equal(
+            "Thursday 22 October 2026, 2 appointments",
+            CalendarLabel.DayAccessName(new DateOnly(2026, 10, 22), 2));
     }
 
     [Fact]
@@ -216,5 +280,38 @@ public class CalendarRangeTests
         Assert.True(options.PreviewEmpty);
         Assert.Equal(new DateOnly(2026, 10, 21), options.Today);
         Assert.Equal("day", options.View);
+    }
+
+    [Fact]
+    public void Today_query_accepts_only_a_real_yyyy_mm_dd_date()
+    {
+        Assert.Equal(new DateOnly(2026, 10, 21), PrototypeOptions.Parse("http://local/?today=2026-10-21").Today);
+        Assert.Equal(new DateOnly(2024, 2, 29), PrototypeOptions.Parse("http://local/?today=2024-02-29").Today);
+        Assert.Null(PrototypeOptions.Parse("http://local/?today=2025-02-29").Today);
+        Assert.Null(PrototypeOptions.Parse("http://local/?today=2026-13-01").Today);
+        Assert.Null(PrototypeOptions.Parse("http://local/?today=21-10-2026").Today);
+        Assert.Null(PrototypeOptions.Parse("http://local/?today=2026-10-21<script>").Today);
+        Assert.Null(PrototypeOptions.Parse("http://local/?today=").Today);
+        Assert.Null(PrototypeOptions.Parse("http://local/?today=not-a-date").Today);
+
+        Assert.Equal("month", PrototypeOptions.Parse("http://local/?view=month").View);
+        Assert.Null(PrototypeOptions.Parse("http://local/?view=<b>month</b>").View);
+    }
+
+    [Fact]
+    public void Clock_formats_the_same_time_in_24h_and_12h()
+    {
+        Assert.Equal("00:00", ClockFormat.Format(new TimeOnly(0, 0), true));
+        Assert.Equal("12:00 AM", ClockFormat.Format(new TimeOnly(0, 0), false));
+        Assert.Equal("09:05", ClockFormat.Format(new TimeOnly(9, 5), true));
+        Assert.Equal("9:05 AM", ClockFormat.Format(new TimeOnly(9, 5), false));
+        Assert.Equal("12:00", ClockFormat.Format(new TimeOnly(12, 0), true));
+        Assert.Equal("12:00 PM", ClockFormat.Format(new TimeOnly(12, 0), false));
+        Assert.Equal("15:30", ClockFormat.Format(new TimeOnly(15, 30), true));
+        Assert.Equal("3:30 PM", ClockFormat.Format(new TimeOnly(15, 30), false));
+        Assert.Equal("23:59", ClockFormat.Format(new TimeOnly(23, 59), true));
+        Assert.Equal("11:59 PM", ClockFormat.Format(new TimeOnly(23, 59), false));
+        Assert.Equal("10:00–11:30", ClockFormat.Range(new TimeOnly(10, 0), new TimeOnly(11, 30), true));
+        Assert.Equal("10:00 AM–11:30 AM", ClockFormat.Range(new TimeOnly(10, 0), new TimeOnly(11, 30), false));
     }
 }

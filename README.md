@@ -11,13 +11,19 @@ dotnet run
 
 Then open `http://127.0.0.1:5088`.
 
-- `/` is the calendar. It shows a week, and a single day when the window is narrow.
-- `/?reset=1` clears saved appointments and restores the three examples.
-- `/?today=yyyy-mm-dd` fixes what "today" is.
+- `/` opens the month. Week and day are the other two views. On a narrow window the three columns stack.
+- `/?reset=1` clears saved appointments and restores the three examples. It leaves the theme and the clock choice alone.
+- `/?today=yyyy-mm-dd` fixes what "today" is. Any other value is ignored.
 - `/?preview=empty` shows an empty calendar without saving that wipe.
-- `/?view=day` or `/?view=week` forces the layout.
+- `/?view=month`, `/?view=week`, or `/?view=day` opens that view. Anything else is ignored.
 
-Times are shown in the browser's time zone. That zone is named once in the header.
+Weeks start on Monday. The clock shows 24-hour times until you choose 12-hour, and that choice is remembered in this browser. The theme follows the system until you pick light or dark.
+
+Times use the browser's time zone. That zone is named once, in the details column.
+
+Headings use Cal Sans and text uses Inter. Both are self-hosted. If either file is missing, the page falls back to the system font stack.
+
+Appointments are timed only. There is no all-day appointment.
 
 ## Check
 

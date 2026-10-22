@@ -4,7 +4,8 @@ namespace BookingCalendar.Core;
 /// Test-only URL options. <c>?reset=1</c> clears saved appointments and restores the
 /// three examples. <c>?today=yyyy-mm-dd</c> fixes what "today" is.
 /// <c>?preview=empty</c> shows a week with nothing on it.
-/// <c>?view=day</c> or <c>?view=week</c> forces the layout.
+/// <c>?view=month</c>, <c>?view=week</c>, or <c>?view=day</c> forces the layout.
+/// A <c>?today=</c> value that is not a real yyyy-mm-dd date is ignored.
 /// </summary>
 public sealed record PrototypeOptions(bool Reset, DateOnly? Today, bool PreviewEmpty, string? View)
 {
@@ -44,7 +45,7 @@ public sealed record PrototypeOptions(bool Reset, DateOnly? Today, bool PreviewE
             if (key == "preview" && value == "empty")
                 previewEmpty = true;
 
-            if (key == "view" && value is "day" or "week")
+            if (key == "view" && value is "day" or "week" or "month")
                 view = value;
         }
 

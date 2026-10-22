@@ -3,7 +3,7 @@ using Microsoft.JSInterop;
 
 namespace BookingCalendar.App.State;
 
-/// <summary>Appointments for this browser, plus the day the calendar is showing.</summary>
+/// <summary>Appointments for this browser, plus the day and view the calendar is showing.</summary>
 public sealed class AppointmentStore : IAsyncDisposable
 {
     private readonly IJSRuntime _js;
@@ -19,12 +19,12 @@ public sealed class AppointmentStore : IAsyncDisposable
     public DateOnly Cursor { get; private set; }
     public IReadOnlyList<Appointment> Appointments { get; private set; } = [];
     public string? Toast { get; private set; }
-    public string? ForcedView { get; private set; }
-
-    public bool ShowDay => ForcedView == "day" || (ForcedView != "week" && Narrow);
+    public string View { get; private set; } = "month";
+    public bool Use24Hour { get; private set; } = true;
+    public bool Dark { get; private set; }
 
     public IReadOnlyList<DateOnly> VisibleDays =>
-        ShowDay ? [Cursor] : CalendarRange.Week(Cursor);
+        View == "day" ? [Cursor] : CalendarRange.Week(Cursor);
 
     public bool HasExamples => Appointments.Any(item => item.IsExample);
 
@@ -33,13 +33,22 @@ public sealed class AppointmentStore : IAsyncDisposable
     public async Task InitializeAsync(string uri)
     {
         var options = PrototypeOptions.Parse(uri);
-        ForcedView = options.View;
+        if (options.View is "day" or "week" or "month")
+            View = options.View;
 
         var zone = await _js.InvokeAsync<ZoneInfo>("northQuay.zone");
         ZoneLabel = string.IsNullOrWhiteSpace(zone.TimeZone) ? "UTC" : zone.TimeZone;
 
         Today = options.Today ?? DateOnly.FromDateTime(DateTime.Now);
         Cursor = Today;
+
+        var theme = await _js.InvokeAsync<string?>("northQuay.loadTheme");
+        var prefersDark = await _js.InvokeAsync<bool>("northQuay.prefersDark");
+        Dark = theme == "dark" || (theme != "light" && prefersDark);
+        await _js.InvokeVoidAsync("northQuay.applyTheme", Dark ? "dark" : "light");
+
+        var clock = await _js.InvokeAsync<string?>("northQuay.loadClock");
+        Use24Hour = clock != "12";
 
         if (options.Reset)
             await _js.InvokeVoidAsync("northQuay.clear");
@@ -79,21 +88,53 @@ public sealed class AppointmentStore : IAsyncDisposable
         Changed?.Invoke();
     }
 
+    public void SetView(string view)
+    {
+        if (view is not ("month" or "week" or "day") || view == View)
+            return;
+
+        View = view;
+        Changed?.Invoke();
+    }
+
+    public void Select(DateOnly date)
+    {
+        if (Cursor == date)
+            return;
+
+        Cursor = date;
+        Changed?.Invoke();
+    }
+
     public void ShowToday()
     {
+        if (Cursor == Today)
+            return;
+
         Cursor = Today;
         Changed?.Invoke();
     }
 
-    public void Previous()
+    public void Previous() => Move(-1);
+
+    public void Next() => Move(1);
+
+    public async Task ToggleThemeAsync()
     {
-        Cursor = CalendarRange.Shift(Cursor, ShowDay ? -1 : -7);
+        Dark = !Dark;
+        var name = Dark ? "dark" : "light";
+        await _js.InvokeVoidAsync("northQuay.saveTheme", name);
+        await _js.InvokeVoidAsync("northQuay.applyTheme", name);
         Changed?.Invoke();
     }
 
-    public void Next()
+    public async Task SetClockAsync(bool twentyFourHour)
     {
-        Cursor = CalendarRange.Shift(Cursor, ShowDay ? 1 : 7);
+        if (Use24Hour == twentyFourHour)
+            return;
+
+        Use24Hour = twentyFourHour;
+        await _js.InvokeVoidAsync("northQuay.saveClock", twentyFourHour ? "24" : "12");
         Changed?.Invoke();
     }
 
@@ -141,6 +182,17 @@ public sealed class AppointmentStore : IAsyncDisposable
         }
 
         _self?.Dispose();
+    }
+
+    private void Move(int direction)
+    {
+        Cursor = View switch
+        {
+            "day" => CalendarRange.Shift(Cursor, direction),
+            "week" => CalendarRange.Shift(Cursor, direction * 7),
+            _ => CalendarRange.ShiftMonth(Cursor, direction),
+        };
+        Changed?.Invoke();
     }
 
     private void ShowToast(string message)

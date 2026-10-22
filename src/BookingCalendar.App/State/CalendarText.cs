@@ -3,7 +3,7 @@ using BookingCalendar.Core;
 
 namespace BookingCalendar.App.State;
 
-/// <summary>Display text for dates and times. Weeks are titled from Sunday.</summary>
+/// <summary>Display text for dates and times. Weeks are titled from Monday.</summary>
 public static class CalendarText
 {
     public static bool TryParseTime(string? value, out TimeOnly time)
@@ -29,17 +29,7 @@ public static class CalendarText
     public static string Range(TimeOnly start, TimeOnly end) =>
         $"{Time(start)}–{Time(end)}";
 
-    public static string Weekday(DateOnly date) => date.DayOfWeek switch
-    {
-        DayOfWeek.Sunday => "Sunday",
-        DayOfWeek.Monday => "Monday",
-        DayOfWeek.Tuesday => "Tuesday",
-        DayOfWeek.Wednesday => "Wednesday",
-        DayOfWeek.Thursday => "Thursday",
-        DayOfWeek.Friday => "Friday",
-        DayOfWeek.Saturday => "Saturday",
-        _ => "",
-    };
+    public static string Weekday(DateOnly date) => CalendarLabel.Weekday(date);
 
     public static string ShortWeekday(DateOnly date) => date.DayOfWeek switch
     {
@@ -53,21 +43,16 @@ public static class CalendarText
         _ => "",
     };
 
-    public static string Month(DateOnly date) => date.Month switch
-    {
-        1 => "January",
-        2 => "February",
-        3 => "March",
-        4 => "April",
-        5 => "May",
-        6 => "June",
-        7 => "July",
-        8 => "August",
-        9 => "September",
-        10 => "October",
-        11 => "November",
-        _ => "December",
-    };
+    public static string Month(DateOnly date) => CalendarLabel.Month(date);
+
+    public static string FullDate(DateOnly date) =>
+        $"{Weekday(date)} {date.Day} {Month(date)} {date.Year}";
+
+    public static string Clock(TimeOnly time, bool twentyFourHour) =>
+        ClockFormat.Format(time, twentyFourHour);
+
+    public static string ClockRange(TimeOnly start, TimeOnly end, bool twentyFourHour) =>
+        ClockFormat.Range(start, end, twentyFourHour);
 
     public static string DayTitle(DateOnly date) =>
         $"{Weekday(date)} {date.Day} {Month(date)}";

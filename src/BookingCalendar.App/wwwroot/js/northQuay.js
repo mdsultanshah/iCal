@@ -1,7 +1,8 @@
 window.northQuay = {
   _media: null,
   _onMedia: null,
-  _dialogs: {},
+  _month: null,
+  _escape: null,
 
   load: function () {
     return localStorage.getItem("northquay.appointments.v1");
@@ -11,6 +12,24 @@ window.northQuay = {
   },
   clear: function () {
     localStorage.removeItem("northquay.appointments.v1");
+  },
+  loadTheme: function () {
+    return localStorage.getItem("northquay.theme.v1");
+  },
+  saveTheme: function (name) {
+    localStorage.setItem("northquay.theme.v1", name);
+  },
+  applyTheme: function (name) {
+    document.documentElement.dataset.theme = name === "dark" ? "dark" : "light";
+  },
+  prefersDark: function () {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  },
+  loadClock: function () {
+    return localStorage.getItem("northquay.clock.v1");
+  },
+  saveClock: function (name) {
+    localStorage.setItem("northquay.clock.v1", name);
   },
   zone: function () {
     var timeZone = "UTC";
@@ -50,46 +69,56 @@ window.northQuay = {
       node.focus();
     }
   },
-  bindDialog: function (id, ref) {
-    this.unbindDialog(id);
+  bindMonth: function (ref) {
+    this.unbindMonth();
     var handler = function (event) {
-      var dialog = document.querySelector("[data-dialog]");
-      if (!dialog) {
+      var key = event.key;
+      if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "ArrowUp" && key !== "ArrowDown") {
         return;
       }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        ref.invokeMethodAsync("CloseFromKey");
+      var target = event.target;
+      if (!target || !target.closest) {
         return;
       }
-      if (event.key !== "Tab") {
+      if (target.closest("input, textarea, select")) {
         return;
       }
-      var nodes = dialog.querySelectorAll("button, [href], input, select, textarea");
-      var list = Array.prototype.filter.call(nodes, function (node) {
-        return !node.disabled && node.tabIndex !== -1;
-      });
-      if (!list.length) {
+      var button = target.closest("[data-month-grid] [data-date]");
+      if (!button) {
         return;
       }
-      var first = list[0];
-      var last = list[list.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      event.preventDefault();
+      ref.invokeMethodAsync("MoveDay", button.getAttribute("data-date"), key);
     };
-    this._dialogs[id] = handler;
+    this._month = handler;
     document.addEventListener("keydown", handler);
   },
-  unbindDialog: function (id) {
-    var handler = this._dialogs[id];
-    if (handler) {
-      document.removeEventListener("keydown", handler);
-      delete this._dialogs[id];
+  unbindMonth: function () {
+    if (this._month) {
+      document.removeEventListener("keydown", this._month);
+      this._month = null;
+    }
+  },
+  bindEscape: function (ref) {
+    this.unbindEscape();
+    var handler = function (event) {
+      if (event.key !== "Escape") {
+        return;
+      }
+      var target = event.target;
+      if (target && target.closest && target.closest("[data-month-grid]")) {
+        return;
+      }
+      event.preventDefault();
+      ref.invokeMethodAsync("CloseFromKey");
+    };
+    this._escape = handler;
+    document.addEventListener("keydown", handler);
+  },
+  unbindEscape: function () {
+    if (this._escape) {
+      document.removeEventListener("keydown", this._escape);
+      this._escape = null;
     }
   }
 };

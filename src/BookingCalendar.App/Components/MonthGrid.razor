@@ -1,0 +1,148 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="month-block" data-month-grid>
+    <div class="weekday-row" aria-hidden="true">
+        @foreach (var name in Weekdays)
+        {
+            <span>@name</span>
+        }
+    </div>
+    <div class="month-grid" role="grid" aria-label="@Caption">
+        @foreach (var day in Days)
+        {
+            var count = Appointments.Count(item => item.Date == day);
+            var selected = day == Selected;
+            var today = day == Today;
+            <button type="button"
+                    class="day @(count > 0 ? "has" : null) @(selected ? "is-selected" : null) @(InMonth(day) ? null : "is-outside")"
+                    role="gridcell"
+                    data-date="@CalendarText.DateValue(day)"
+                    tabindex="@(_focus == day ? 0 : -1)"
+                    aria-label="@CalendarLabel.DayAccessName(day, count)"
+                    aria-selected="@(selected ? "true" : "false")"
+                    aria-current="@(today ? "date" : null)"
+                    data-today="@(today ? "true" : null)"
+                    data-selected="@(selected ? "true" : null)"
+                    @onclick="() => Choose(day)">
+                <span class="num">@day.Day</span>
+                <span class="dot @(today ? "is-today" : null)" aria-hidden="true"></span>
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly string[] Weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    private DotNetObjectReference<MonthGrid>? _self;
+    private DateOnly _focus;
+    private DateOnly _seenSelected;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DateOnly> Days { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Appointment> Appointments { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public DateOnly Selected { get; set; }
+
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+
+    [Parameter]
+    public EventCallback<DateOnly> OnSelect { get; set; }
+
+    private string Caption =>
+        Days.Count == 0 ? "Month" : $"{CalendarText.Month(Selected)} {Selected.Year}";
+
+    protected override void OnParametersSet()
+    {
+        var focusInGrid = Days.Contains(_focus);
+        if (_focus == default || !focusInGrid || Selected != _seenSelected)
+        {
+            _focus = Days.Contains(Selected) ? Selected : Days.FirstOrDefault();
+            _seenSelected = Selected;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _self = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("northQuay.bindMonth", _self);
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+    }
+
+    [JSInvokable]
+    public async Task MoveDay(string iso, string key)
+    {
+        if (!PrototypeOptions.TryParseDate(iso, out var date))
+            return;
+
+        var days = Days.ToList();
+        var index = days.IndexOf(date);
+        if (index < 0)
+            return;
+
+        var delta = key switch
+        {
+            "ArrowLeft" => -1,
+            "ArrowRight" => 1,
+            "ArrowUp" => -7,
+            "ArrowDown" => 7,
+            _ => 0,
+        };
+        if (delta == 0)
+            return;
+
+        var next = index + delta;
+        if (next < 0 || next >= days.Count)
+            return;
+
+        _focus = days[next];
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "northQuay.focus",
+                $"[data-month-grid] [data-date='{CalendarText.DateValue(_focus)}']");
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("northQuay.unbindMonth");
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+
+        _self?.Dispose();
+    }
+
+    private bool InMonth(DateOnly day) => CalendarRange.InMonth(day, Selected);
+
+    private async Task Choose(DateOnly day)
+    {
+        _focus = day;
+        _seenSelected = day;
+        await OnSelect.InvokeAsync(day);
+    }
+}
