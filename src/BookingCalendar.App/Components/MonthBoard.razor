@@ -36,7 +36,10 @@
                 {
                     <span class="today-dot" aria-hidden="true"></span>
                 }
-                <span class="busy-dot @(count > 0 ? "is-on" : null)" aria-hidden="true"></span>
+                @if (ShowBusyDots && count > 0)
+                {
+                    <span class="busy-dot is-on" aria-hidden="true"></span>
+                }
             </button>
             <div class="chips">
                 @foreach (var item in DayAgenda.Chips(mine))
@@ -87,6 +90,9 @@
     public bool Use24Hour { get; set; } = true;
 
     [Parameter]
+    public bool ShowBusyDots { get; set; }
+
+    [Parameter]
     public EventCallback<DateOnly> OnDay { get; set; }
 
     [Parameter]
@@ -110,7 +116,7 @@
         _self = DotNetObjectReference.Create(this);
         try
         {
-            await JS.InvokeVoidAsync("northQuay.bindMonth", _self);
+            await JS.InvokeVoidAsync("calendar.bindMonth", _self);
         }
         catch (JSException)
         {
@@ -135,7 +141,7 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("northQuay.unbindMonth");
+            await JS.InvokeVoidAsync("calendar.unbindMonth");
         }
         catch (JSException)
         {

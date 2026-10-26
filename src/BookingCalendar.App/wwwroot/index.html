@@ -6,7 +6,7 @@
     <script>
         (function () {
             var theme = null;
-            try { theme = localStorage.getItem("northquay.theme.v1"); } catch (error) { theme = null; }
+            try { theme = localStorage.getItem("calendar.theme.v1"); } catch (error) { theme = null; }
             if (theme !== "light" && theme !== "dark") {
                 theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
             }
@@ -37,7 +37,7 @@
         <a href="." class="reload">Reload</a>
         <span class="dismiss">🗙</span>
     </div>
-    <script src="js/northQuay.js"></script>
+    <script src="js/calendar.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>
 

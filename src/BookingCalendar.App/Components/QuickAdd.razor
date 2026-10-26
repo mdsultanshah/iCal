@@ -19,6 +19,7 @@
     <form @onsubmit="Submit" @onsubmit:preventDefault novalidate>
         <label for="quick-title">Title</label>
         <input id="quick-title"
+               @ref="_titleInput"
                type="text"
                value="@_title"
                aria-invalid="@Invalid(_titleError)"
@@ -54,6 +55,7 @@
 
 @code {
     private readonly string _trapId = "popup";
+    private ElementReference _titleInput;
     private DotNetObjectReference<QuickAdd>? _self;
     private string _title = "";
     private string _start = "";
@@ -99,7 +101,16 @@
         _self = DotNetObjectReference.Create(this);
         try
         {
-            await JS.InvokeVoidAsync("northQuay.bindTrap", _trapId, _self);
+            await _titleInput.FocusAsync();
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("calendar.bindTrap", _trapId, _self);
             if (!Narrow)
                 await PlaceAsync();
             else
@@ -107,8 +118,6 @@
                 _ready = true;
                 StateHasChanged();
             }
-
-            await JS.InvokeVoidAsync("northQuay.focus", "#quick-title");
         }
         catch (JSException)
         {
@@ -123,7 +132,7 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("northQuay.unbindTrap", _trapId);
+            await JS.InvokeVoidAsync("calendar.unbindTrap", _trapId);
         }
         catch (JSException)
         {
@@ -135,7 +144,7 @@
 
     private async Task PlaceAsync()
     {
-        var box = await JS.InvokeAsync<AnchorBox?>("northQuay.anchor", CalendarText.DateValue(Date));
+        var box = await JS.InvokeAsync<AnchorBox?>("calendar.anchor", CalendarText.DateValue(Date));
         _style = box is null ? "top:72px;left:16px;" : Place(box);
         _ready = true;
         StateHasChanged();

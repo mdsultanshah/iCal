@@ -30,22 +30,22 @@ public sealed class AppointmentStore : IAsyncDisposable
     {
         var options = PrototypeOptions.Parse(uri);
 
-        var zone = await _js.InvokeAsync<ZoneInfo>("northQuay.zone");
+        var zone = await _js.InvokeAsync<ZoneInfo>("calendar.zone");
         ZoneLabel = string.IsNullOrWhiteSpace(zone.TimeZone) ? "UTC" : zone.TimeZone;
 
         Today = options.Today ?? DateOnly.FromDateTime(DateTime.Now);
         Cursor = Today;
 
-        var theme = await _js.InvokeAsync<string?>("northQuay.loadTheme");
-        var prefersDark = await _js.InvokeAsync<bool>("northQuay.prefersDark");
+        var theme = await _js.InvokeAsync<string?>("calendar.loadTheme");
+        var prefersDark = await _js.InvokeAsync<bool>("calendar.prefersDark");
         Dark = theme == "dark" || (theme != "light" && prefersDark);
-        await _js.InvokeVoidAsync("northQuay.applyTheme", Dark ? "dark" : "light");
+        await _js.InvokeVoidAsync("calendar.applyTheme", Dark ? "dark" : "light");
 
-        var clock = await _js.InvokeAsync<string?>("northQuay.loadClock");
+        var clock = await _js.InvokeAsync<string?>("calendar.loadClock");
         Use24Hour = clock != "12";
 
         if (options.Reset)
-            await _js.InvokeVoidAsync("northQuay.clear");
+            await _js.InvokeVoidAsync("calendar.clear");
 
         if (options.PreviewEmpty)
         {
@@ -53,7 +53,7 @@ public sealed class AppointmentStore : IAsyncDisposable
         }
         else
         {
-            var json = await _js.InvokeAsync<string?>("northQuay.load");
+            var json = await _js.InvokeAsync<string?>("calendar.load");
             if (!AppointmentArchive.TryRead(json, out var loaded))
             {
                 Appointments = ExampleAppointments.Create(Today);
@@ -65,9 +65,9 @@ public sealed class AppointmentStore : IAsyncDisposable
             }
         }
 
-        Narrow = await _js.InvokeAsync<bool>("northQuay.isNarrow");
+        Narrow = await _js.InvokeAsync<bool>("calendar.isNarrow");
         _self = DotNetObjectReference.Create(this);
-        await _js.InvokeVoidAsync("northQuay.watchNarrow", _self);
+        await _js.InvokeVoidAsync("calendar.watchNarrow", _self);
         IsReady = true;
         Changed?.Invoke();
     }
@@ -108,8 +108,8 @@ public sealed class AppointmentStore : IAsyncDisposable
     {
         Dark = !Dark;
         var name = Dark ? "dark" : "light";
-        await _js.InvokeVoidAsync("northQuay.saveTheme", name);
-        await _js.InvokeVoidAsync("northQuay.applyTheme", name);
+        await _js.InvokeVoidAsync("calendar.saveTheme", name);
+        await _js.InvokeVoidAsync("calendar.applyTheme", name);
         Changed?.Invoke();
     }
 
@@ -119,7 +119,7 @@ public sealed class AppointmentStore : IAsyncDisposable
             return;
 
         Use24Hour = twentyFourHour;
-        await _js.InvokeVoidAsync("northQuay.saveClock", twentyFourHour ? "24" : "12");
+        await _js.InvokeVoidAsync("calendar.saveClock", twentyFourHour ? "24" : "12");
         Changed?.Invoke();
     }
 
@@ -159,7 +159,7 @@ public sealed class AppointmentStore : IAsyncDisposable
     {
         try
         {
-            await _js.InvokeVoidAsync("northQuay.unwatchNarrow");
+            await _js.InvokeVoidAsync("calendar.unwatchNarrow");
         }
         catch (JSException)
         {
@@ -195,7 +195,7 @@ public sealed class AppointmentStore : IAsyncDisposable
 
     private async Task PersistAsync()
     {
-        await _js.InvokeVoidAsync("northQuay.save", AppointmentArchive.Write(Appointments));
+        await _js.InvokeVoidAsync("calendar.save", AppointmentArchive.Write(Appointments));
     }
 
     private static string NextId() => Guid.NewGuid().ToString("N")[..8];

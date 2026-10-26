@@ -1,23 +1,23 @@
-window.northQuay = {
+window.calendar = {
   _media: null,
   _onMedia: null,
   _month: null,
   _traps: {},
 
   load: function () {
-    return localStorage.getItem("northquay.appointments.v1");
+    return localStorage.getItem("calendar.appointments.v1");
   },
   save: function (json) {
-    localStorage.setItem("northquay.appointments.v1", json);
+    localStorage.setItem("calendar.appointments.v1", json);
   },
   clear: function () {
-    localStorage.removeItem("northquay.appointments.v1");
+    localStorage.removeItem("calendar.appointments.v1");
   },
   loadTheme: function () {
-    return localStorage.getItem("northquay.theme.v1");
+    return localStorage.getItem("calendar.theme.v1");
   },
   saveTheme: function (name) {
-    localStorage.setItem("northquay.theme.v1", name);
+    localStorage.setItem("calendar.theme.v1", name);
   },
   applyTheme: function (name) {
     document.documentElement.dataset.theme = name === "dark" ? "dark" : "light";
@@ -26,10 +26,10 @@ window.northQuay = {
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   },
   loadClock: function () {
-    return localStorage.getItem("northquay.clock.v1");
+    return localStorage.getItem("calendar.clock.v1");
   },
   saveClock: function (name) {
-    localStorage.setItem("northquay.clock.v1", name);
+    localStorage.setItem("calendar.clock.v1", name);
   },
   zone: function () {
     var timeZone = "UTC";

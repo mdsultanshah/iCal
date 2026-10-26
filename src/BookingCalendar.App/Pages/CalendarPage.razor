@@ -23,16 +23,37 @@
             <button type="button" class="today" @onclick="GoToday">Today</button>
         </div>
         <div class="tools">
-            <div class="clock" role="group" aria-label="Time format">
-                <button type="button" aria-pressed="@Pressed(!Store.Use24Hour)" @onclick="() => Store.SetClockAsync(false)">12h</button>
-                <button type="button" aria-pressed="@Pressed(Store.Use24Hour)" @onclick="() => Store.SetClockAsync(true)">24h</button>
-            </div>
-            <button type="button" class="icon theme" aria-label="@(Store.Dark ? "Use light theme" : "Use dark theme")" @onclick="Store.ToggleThemeAsync">
-                @(Store.Dark ? "Light" : "Dark")
-            </button>
-            @if (Store.HasExamples)
+            @if (Store.Narrow)
             {
-                <button type="button" class="ghost" @onclick="OpenClear">Clear examples</button>
+                <button type="button"
+                        id="header-more"
+                        class="ghost"
+                        aria-expanded="@(_menuOpen ? "true" : "false")"
+                        aria-controls="header-menu"
+                        @onclick="ToggleMenu"
+                        @onkeydown="MenuKey">More</button>
+                @if (_menuOpen)
+                {
+                    <div id="header-menu" @onkeydown="MenuKey">
+                        <div class="clock" role="group" aria-label="Time format">
+                            <button type="button" aria-pressed="@Pressed(!Store.Use24Hour)" @onclick="() => Store.SetClockAsync(false)">12h</button>
+                            <button type="button" aria-pressed="@Pressed(Store.Use24Hour)" @onclick="() => Store.SetClockAsync(true)">24h</button>
+                        </div>
+                        <button type="button" class="icon theme" aria-label="@(Store.Dark ? "Use light theme" : "Use dark theme")" @onclick="Store.ToggleThemeAsync">
+                            @(Store.Dark ? "Light" : "Dark")
+                        </button>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="clock" role="group" aria-label="Time format">
+                    <button type="button" aria-pressed="@Pressed(!Store.Use24Hour)" @onclick="() => Store.SetClockAsync(false)">12h</button>
+                    <button type="button" aria-pressed="@Pressed(Store.Use24Hour)" @onclick="() => Store.SetClockAsync(true)">24h</button>
+                </div>
+                <button type="button" class="icon theme" aria-label="@(Store.Dark ? "Use light theme" : "Use dark theme")" @onclick="Store.ToggleThemeAsync">
+                    @(Store.Dark ? "Light" : "Dark")
+                </button>
             }
         </div>
     </header>
@@ -43,6 +64,7 @@
                     Selected="Store.Cursor"
                     Today="Store.Today"
                     Use24Hour="Store.Use24Hour"
+                    ShowBusyDots="Store.Narrow"
                     OnDay="OpenQuick"
                     OnArrow="MoveFocus"
                     OnOpen="OpenDetails"
@@ -82,6 +104,13 @@
                 <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
             </svg>
         </button>
+    }
+
+    @if (Store.HasExamples)
+    {
+        <footer class="screen-footer">
+            <button type="button" class="quiet" @onclick="OpenClear">Clear examples</button>
+        </footer>
     }
 </div>
 
@@ -137,6 +166,7 @@
 @code {
     private QuickOpen? _quick;
     private PanelOpen? _panel;
+    private bool _menuOpen;
     private int _quickSerial;
     private bool _focusDay;
     private DateOnly _anchorDay;
@@ -163,7 +193,7 @@
         try
         {
             await JS.InvokeVoidAsync(
-                "northQuay.focus",
+                "calendar.focus",
                 $"[data-month-grid] [data-date='{CalendarText.DateValue(_anchorDay)}']");
         }
         catch (JSException)
@@ -176,6 +206,9 @@
 
     private void OnChanged()
     {
+        if (!Store.Narrow)
+            _menuOpen = false;
+
         if (_panel is { Id: { } id, Mode: "details" or "edit" or "delete" } &&
             Store.Appointments.All(item => item.Id != id))
         {
@@ -411,6 +444,14 @@
         _dateError = null;
         _startError = null;
         _endError = null;
+    }
+
+    private void ToggleMenu() => _menuOpen = !_menuOpen;
+
+    private void MenuKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            _menuOpen = false;
     }
 
     private static string Pressed(bool on) => on ? "true" : "false";

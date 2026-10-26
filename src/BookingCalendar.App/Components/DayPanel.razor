@@ -9,10 +9,7 @@
      aria-modal="true"
      aria-labelledby="panel-title"
      tabindex="-1">
-    <div class="panel-bar">
-        <button type="button" id="panel-close" class="ghost" @onclick="OnClose">Close</button>
-    </div>
-
+    <div class="panel-main">
     @if (Mode == "delete")
     {
         <h2 id="panel-title">Delete this appointment?</h2>
@@ -91,6 +88,8 @@
             </div>
         }
     }
+    </div>
+    <button type="button" id="panel-close" class="ghost" @onclick="OnClose">Close</button>
 </div>
 
 @code {
@@ -193,9 +192,9 @@
         _self = DotNetObjectReference.Create(this);
         try
         {
-            await JS.InvokeVoidAsync("northQuay.bindTrap", _trapId, _self);
+            await JS.InvokeVoidAsync("calendar.bindTrap", _trapId, _self);
             if (Mode is not ("create" or "edit"))
-                await JS.InvokeVoidAsync("northQuay.focus", "#panel-close");
+                await JS.InvokeVoidAsync("calendar.focus", "#panel-close");
         }
         catch (JSException)
         {
@@ -210,7 +209,7 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("northQuay.unbindTrap", _trapId);
+            await JS.InvokeVoidAsync("calendar.unbindTrap", _trapId);
         }
         catch (JSException)
         {

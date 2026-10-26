@@ -1,5 +1,7 @@
+using System.Reflection;
 using BookingCalendar.App.Components;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 
 namespace BookingCalendar.App.Tests;
 
@@ -22,7 +24,12 @@ public class PopupTitleFocusTests : BunitContext
         var popup = Render(parameters);
 
         var focus = JSInterop.VerifyFocusAsyncInvoke();
-        focus.Arguments[0].ShouldBeElementReferenceTo(popup.Find("#quick-title"));
+        var title = (ElementReference)typeof(QuickAdd)
+            .GetField("_titleInput", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(popup.Instance)!;
+        var focused = Assert.IsType<ElementReference>(focus.Arguments[0]);
+        Assert.Equal(title.Id, focused.Id);
+        Assert.False(string.IsNullOrEmpty(title.Id));
 
         var first = JSInterop.Invocations.First();
         Assert.Equal(focus.Identifier, first.Identifier);
