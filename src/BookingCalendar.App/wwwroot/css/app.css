@@ -458,7 +458,10 @@ h1, h2, h3, .brand, .month-title, .day-heading {
     border-radius: 8px;
 }
 
-.popup[data-positioned="false"]:not(.sheet) { visibility: hidden; }
+.popup[data-positioned="false"]:not(.sheet) {
+    opacity: 0;
+    pointer-events: none;
+}
 
 .popup-bar,
 .panel-bar {
