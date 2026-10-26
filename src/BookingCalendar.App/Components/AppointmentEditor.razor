@@ -1,0 +1,181 @@
+@inject IJSRuntime JS
+
+<form class="editor" @onsubmit="Submit" @onsubmit:preventDefault novalidate>
+    <h2 id="panel-title">@(Mode == "edit" ? "Edit appointment" : "New appointment")</h2>
+    @if (IsExample)
+    {
+        <p class="example-flag"><span class="badge" aria-label="Example">Ex</span></p>
+    }
+
+    <label for="appointment-title">Title</label>
+    <input id="appointment-title"
+           type="text"
+           value="@_title"
+           aria-invalid="@Invalid(TitleError)"
+           aria-describedby="@Described(TitleError, "title-error")"
+           @oninput="OnTitle" />
+    @if (TitleError is not null)
+    {
+        <p id="title-error" class="field-error">@TitleError</p>
+    }
+
+    <label for="appointment-date">Date</label>
+    <input id="appointment-date"
+           type="date"
+           value="@_date"
+           aria-invalid="@Invalid(DateError)"
+           aria-describedby="@Described(DateError, "date-error")"
+           @oninput="OnDate" />
+    @if (DateError is not null)
+    {
+        <p id="date-error" class="field-error">@DateError</p>
+    }
+
+    <label for="appointment-start">Start</label>
+    <input id="appointment-start"
+           type="time"
+           value="@_start"
+           aria-invalid="@Invalid(StartError)"
+           aria-describedby="@Described(StartError, "start-error")"
+           @oninput="OnStart" />
+    @if (StartError is not null)
+    {
+        <p id="start-error" class="field-error">@StartError</p>
+    }
+
+    <label for="appointment-end">End</label>
+    <input id="appointment-end"
+           type="time"
+           value="@_end"
+           aria-invalid="@Invalid(EndError)"
+           aria-describedby="@Described(EndError, "end-error")"
+           @oninput="OnEnd" />
+    @if (EndError is not null)
+    {
+        <p id="end-error" class="field-error">@EndError</p>
+    }
+
+    <label for="appointment-note">Notes</label>
+    <textarea id="appointment-note" rows="3" value="@_note" @oninput="OnNote"></textarea>
+
+    <div class="actions">
+        <button type="button" id="cancel-appointment" class="ghost" @onclick="OnCancel">Cancel</button>
+        <button type="submit" id="save-appointment" class="primary">Save</button>
+    </div>
+</form>
+
+@code {
+    private string _title = "";
+    private string _date = "";
+    private string _start = "";
+    private string _end = "";
+    private string _note = "";
+
+    [Parameter]
+    public string Mode { get; set; } = "create";
+
+    [Parameter]
+    public string? Id { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string Date { get; set; } = "";
+
+    [Parameter]
+    public string Start { get; set; } = "";
+
+    [Parameter]
+    public string End { get; set; } = "";
+
+    [Parameter]
+    public string Note { get; set; } = "";
+
+    [Parameter]
+    public bool IsExample { get; set; }
+
+    [Parameter]
+    public string? TitleError { get; set; }
+
+    [Parameter]
+    public string? DateError { get; set; }
+
+    [Parameter]
+    public string? StartError { get; set; }
+
+    [Parameter]
+    public string? EndError { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnClearError { get; set; }
+
+    [Parameter]
+    public EventCallback<AppointmentDraft> OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _title = Title;
+        _date = Date;
+        _start = Start;
+        _end = End;
+        _note = Note;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("calendar.focus", "#appointment-title");
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+    }
+
+    private Task Submit() =>
+        OnSave.InvokeAsync(new AppointmentDraft(Id, _title, _date, _start, _end, _note));
+
+    private void OnTitle(ChangeEventArgs e)
+    {
+        _title = e.Value?.ToString() ?? "";
+        Clear("title", TitleError);
+    }
+
+    private void OnDate(ChangeEventArgs e)
+    {
+        _date = e.Value?.ToString() ?? "";
+        Clear("date", DateError);
+    }
+
+    private void OnStart(ChangeEventArgs e)
+    {
+        _start = e.Value?.ToString() ?? "";
+        Clear("start", StartError);
+    }
+
+    private void OnEnd(ChangeEventArgs e)
+    {
+        _end = e.Value?.ToString() ?? "";
+        Clear("end", EndError);
+    }
+
+    private void OnNote(ChangeEventArgs e) => _note = e.Value?.ToString() ?? "";
+
+    private void Clear(string field, string? error)
+    {
+        if (error is not null)
+            _ = OnClearError.InvokeAsync(field);
+    }
+
+    private static string? Invalid(string? error) => error is null ? null : "true";
+
+    private static string? Described(string? error, string id) => error is null ? null : id;
+}

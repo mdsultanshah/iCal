@@ -1,0 +1,207 @@
+@using System.Globalization
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="popup @(Narrow ? "sheet" : null)"
+     style="@_style"
+     data-popup
+     data-sheet="@(Narrow ? "popup" : null)"
+     data-positioned="@(_ready ? "true" : "false")"
+     data-trap="popup"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="quick-heading"
+     tabindex="-1">
+    <div class="popup-bar">
+        <h2 id="quick-heading">@CalendarText.DayTitle(Date)</h2>
+        <button type="button" class="ghost" @onclick="OnClose">Close</button>
+    </div>
+    <form @onsubmit="Submit" @onsubmit:preventDefault novalidate>
+        <label for="quick-title">Title</label>
+        <input id="quick-title"
+               @ref="_titleInput"
+               type="text"
+               value="@_title"
+               aria-invalid="@Invalid(_titleError)"
+               aria-describedby="@Described(_titleError, "quick-title-error")"
+               @oninput="OnTitle" />
+        @if (_titleError is not null)
+        {
+            <p id="quick-title-error" class="field-error">@_titleError</p>
+        }
+
+        <label for="quick-start">Start</label>
+        <input id="quick-start"
+               type="text"
+               inputmode="numeric"
+               maxlength="5"
+               spellcheck="false"
+               placeholder="HH:mm"
+               value="@_start"
+               aria-invalid="@Invalid(_timeError)"
+               aria-describedby="@Described(_timeError, "quick-time-error")"
+               @oninput="OnStart" />
+        @if (_timeError is not null)
+        {
+            <p id="quick-time-error" class="field-error">@_timeError</p>
+        }
+
+        <div class="actions">
+            <button type="button" id="quick-more" class="ghost" @onclick="More">More options</button>
+            <button type="submit" id="quick-save" class="primary">Save</button>
+        </div>
+    </form>
+</div>
+
+@code {
+    private readonly string _trapId = "popup";
+    private ElementReference _titleInput;
+    private DotNetObjectReference<QuickAdd>? _self;
+    private string _title = "";
+    private string _start = "";
+    private string? _titleError;
+    private string? _timeError;
+    private string _style = "";
+    private bool _ready;
+
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Start { get; set; } = "";
+
+    [Parameter]
+    public bool Narrow { get; set; }
+
+    [Parameter]
+    public EventCallback<QuickSave> OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback<QuickDraft> OnMore { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    protected override void OnInitialized() => _start = Start;
+
+    protected override void OnParametersSet()
+    {
+        if (!Narrow)
+            return;
+
+        _style = "";
+        _ready = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _self = DotNetObjectReference.Create(this);
+        try
+        {
+            await _titleInput.FocusAsync();
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("calendar.bindTrap", _trapId, _self);
+            if (!Narrow)
+                await PlaceAsync();
+            else
+            {
+                _ready = true;
+                StateHasChanged();
+            }
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+    }
+
+    [JSInvokable]
+    public Task CloseFromKey() => OnClose.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("calendar.unbindTrap", _trapId);
+        }
+        catch (JSException)
+        {
+            // The page is going away.
+        }
+
+        _self?.Dispose();
+    }
+
+    private async Task PlaceAsync()
+    {
+        var box = await JS.InvokeAsync<AnchorBox?>("calendar.anchor", CalendarText.DateValue(Date));
+        _style = box is null ? "top:72px;left:16px;" : Place(box);
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private static string Place(AnchorBox box)
+    {
+        const double width = 280;
+        const double height = 240;
+        var left = box.Left;
+        if (left + width > box.ViewWidth - 8)
+            left = Math.Max(8, box.Right - width);
+        var top = box.Bottom + 4;
+        if (top + height > box.ViewHeight - 8)
+            top = Math.Max(8, box.Top - height);
+        return string.Create(CultureInfo.InvariantCulture, $"top:{top:0}px;left:{left:0}px;");
+    }
+
+    private Task Submit()
+    {
+        _titleError = AppointmentRules.TitleError(_title);
+        var timeOk = ClockFormat.TryParseHourMinute(_start, out var time);
+        _timeError = timeOk ? null : ClockFormat.HourMinuteError;
+        if (timeOk && AppointmentRules.TimeOrderError(time, CalendarRange.DefaultEnd(time)) is { } order)
+            _timeError = order;
+
+        if (_titleError is not null || _timeError is not null)
+            return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(new QuickSave(_title, time));
+    }
+
+    private Task More() => OnMore.InvokeAsync(new QuickDraft(_title, _start));
+
+    private void OnTitle(ChangeEventArgs e)
+    {
+        _title = e.Value?.ToString() ?? "";
+        _titleError = null;
+    }
+
+    private void OnStart(ChangeEventArgs e)
+    {
+        _start = e.Value?.ToString() ?? "";
+        _timeError = null;
+    }
+
+    private static string? Invalid(string? error) => error is null ? null : "true";
+
+    private static string? Described(string? error, string id) => error is null ? null : id;
+
+    private sealed class AnchorBox
+    {
+        public double Top { get; set; }
+        public double Left { get; set; }
+        public double Right { get; set; }
+        public double Bottom { get; set; }
+        public double ViewWidth { get; set; }
+        public double ViewHeight { get; set; }
+    }
+}

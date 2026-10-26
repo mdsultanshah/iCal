@@ -1,0 +1,40 @@
+﻿@inherits LayoutComponentBase
+@inject AppointmentStore Store
+@inject NavigationManager Nav
+
+@if (Store.IsReady)
+{
+    @Body
+}
+else if (_failed)
+{
+    <main class="missing">
+        <h1>Something went wrong</h1>
+        <p>Reload the page to start again.</p>
+    </main>
+}
+else
+{
+    <p class="boot">Loading</p>
+}
+
+@code {
+    private bool _failed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Store.IsReady || _failed)
+            return;
+
+        try
+        {
+            await Store.InitializeAsync(Nav.Uri);
+        }
+        catch (JSException)
+        {
+            _failed = true;
+        }
+
+        StateHasChanged();
+    }
+}
